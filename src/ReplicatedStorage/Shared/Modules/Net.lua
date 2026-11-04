@@ -52,6 +52,9 @@ Net.RemoteEventNames = {
 	"DailyRewardClaimed",       -- server -> client: confirmación visual
 	"NotificationPush",         -- server -> client: notificaciones genéricas cortas
 	"GlobalEventUpdated",       -- server -> client: estado de evento temporal
+	"InventoryUpdated",         -- server -> client: inventario de semillas completo (autoritativo)
+	"ShopStockUpdated",         -- server -> client: restock compartido cada 5 minutos
+	"SlapAction",               -- client -> server: golpe cómico con palo, sin daño
 }
 
 Net.RemoteFunctionNames = {
@@ -64,6 +67,23 @@ Net.RemoteFunctionNames = {
 	"ClaimDailyReward",         -- client -> server: reclamar recompensa diaria
 	"ClaimQuestReward",         -- client -> server: reclamar recompensa de misión
 	"GetPlayerProfileSnapshot", -- client -> server: pedir estado inicial al cargar UI
+	"GetQuestsAndDaily",        -- client -> server: misiones activas + estado de recompensa diaria
+	"GetLeaderboard",           -- client -> server: top de jugadores
+	"GetPlantCatalog",          -- client -> server: índice completo de plantas y rarezas
+	"RebirthPlayer",            -- client -> server: reinicio de progresión con bonificación persistente
+	"GetOfflineEarnings",       -- client -> server: recompensa por tiempo fuera de línea
+	"GiftItem",                 -- client -> server: regalar semillas o flores sin trading
+	"GetShopStock",             -- client -> server: stock global y límite individual del ciclo actual
+	"BuyShopItem",              -- client -> server: comprar un pack o gear del stock vigente
+	"OpenSeedPack",             -- client -> server: abrir un pack de semillas poseído
+	"OpenPetEgg",               -- client -> server: incubar un huevo de mascota poseído
+	"EquipPet",                 -- client -> server: equipar una mascota cúbica propia
+	"UseGear",                  -- client -> server: equipar un tótem o usar la regadera
+	"PlaceCollectionPlant",     -- client -> server: colocar una flor de colección para ingreso/minuto
+	"CollectCollectionPlant",   -- client -> server: devolver una flor colocada a la colección
+	"SellCollectionPlant",      -- client -> server: vender una flor de la colección
+	"ToggleGardenShield",       -- client -> server: activar o apagar el domo del jardín
+	"UnlockIncubator",          -- client -> server: comprar el incubador del jardín
 }
 
 local eventCache: { [string]: RemoteEvent } = {}

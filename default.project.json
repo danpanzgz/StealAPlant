@@ -8,8 +8,136 @@
       "Shared": {
         "$path": "src/ReplicatedStorage/Shared"
       },
+      "InputController": {
+        "$path": "src/ReplicatedStorage/InputController",
+        "$properties": {
+          "RunContext": "Client"
+        }
+      },
+      "Inputs": {
+        "$className": "Folder",
+        "GameplayContext": {
+          "$className": "InputContext",
+          "$properties": {
+            "Priority": 1000,
+            "Enabled": true,
+            "Sink": false
+          },
+          "ToggleInventory": {
+            "$className": "InputAction",
+            "$properties": {
+              "Type": "Bool"
+            },
+            "Keyboard": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "Backquote"
+              }
+            },
+            "Gamepad": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "ButtonY"
+              }
+            }
+          },
+          "Slap": {
+            "$className": "InputAction",
+            "$properties": {
+              "Type": "Bool"
+            },
+            "Keyboard": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "G"
+              }
+            },
+            "Gamepad": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "ButtonR2"
+              }
+            }
+          },
+          "PlacementPointer": {
+            "$className": "InputAction",
+            "$properties": {
+              "Type": "ViewportPosition"
+            },
+            "Mouse": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "MousePosition"
+              }
+            },
+            "Touch": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "TouchPosition"
+              }
+            }
+          }
+        },
+        "PlacementContext": {
+          "$className": "InputContext",
+          "$properties": {
+            "Priority": 1100,
+            "Enabled": false,
+            "Sink": true
+          },
+          "ConfirmPlacement": {
+            "$className": "InputAction",
+            "$properties": {
+              "Type": "Bool"
+            },
+            "Mouse": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "MouseLeftButton"
+              }
+            },
+            "Gamepad": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "ButtonA"
+              }
+            },
+            "Touch": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "TouchPosition"
+              }
+            }
+          },
+          "CancelPlacement": {
+            "$className": "InputAction",
+            "$properties": {
+              "Type": "Bool"
+            },
+            "Keyboard": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "Escape"
+              }
+            },
+            "Gamepad": {
+              "$className": "InputBinding",
+              "$properties": {
+                "KeyCode": "ButtonB"
+              }
+            }
+          }
+        }
+      },
       "Remotes": {
         "$className": "Folder"
+      }
+    },
+
+    "Players": {
+      "$className": "Players",
+      "$properties": {
+        "MaxPlayers": 13
       }
     },
 

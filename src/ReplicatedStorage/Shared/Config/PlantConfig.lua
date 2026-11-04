@@ -8,8 +8,8 @@
 	growTimeSeconds: tiempo total para pasar de Seed -> Mature.
 	stageCount: número de fases visuales de crecimiento (Seed, Sprout, ... Mature).
 	baseSellValue: valor de venta al cosechar en estado Mature, sin mutación.
-	passiveIncomePerCycle: Cash que genera automáticamente mientras está Mature
-		y no ha sido cosechada, pagado cada GameConfig.IncomeTickInterval.
+	passiveIncomePerCycle: base histórica usada para calcular el ingreso por
+		minuto de una flor individual colocada en el jardín.
 	color: color base usado para representar la planta con Parts simples
 		(placeholder art-friendly, reemplazable por modelos reales sin tocar lógica).
 ]]
@@ -154,13 +154,48 @@ local PlantConfig: { [string]: PlantData } = {
 		baseSellValue = 3200, passiveIncomePerCycle = 130,
 		color = Color3.fromRGB(255, 140, 40),
 	},
+	CosmicPeony = {
+		id = "CosmicPeony", displayName = "Cosmic Peony", zone = "MysticGrove", rarity = "Mythic",
+		seedPrice = 25000, growTimeSeconds = 900, stageCount = 6,
+		baseSellValue = 9500, passiveIncomePerCycle = 360,
+		color = Color3.fromRGB(255, 91, 158),
+	},
+	AuroraLotus = {
+		id = "AuroraLotus", displayName = "Aurora Lotus", zone = "MysticGrove", rarity = "Celestial",
+		seedPrice = 80000, growTimeSeconds = 1200, stageCount = 6,
+		baseSellValue = 30000, passiveIncomePerCycle = 1000,
+		color = Color3.fromRGB(120, 225, 255),
+	},
 }
 
 -- Lista ordenada por zona, útil para poblar la Seed Shop en el orden correcto
 PlantConfig.OrderByZone = {
 	StarterMeadow = { "Carrot", "Potato", "Tomato", "Corn", "Sunflower", "Strawberry", "Pumpkin" },
 	GreenhouseValley = { "Cactus", "Blueberry", "Grape", "Watermelon", "Pineapple", "Coconut", "Dragonfruit" },
-	MysticGrove = { "Starfruit", "EmberRose", "CrystalBerry", "Moonflower", "CelestialOrchid", "PhoenixBloom" },
+	MysticGrove = { "Starfruit", "EmberRose", "CrystalBerry", "Moonflower", "CelestialOrchid", "PhoenixBloom", "CosmicPeony", "AuroraLotus" },
 } :: any
+
+function PlantConfig.GetCatalog(): { [number]: any }
+	local catalog = {}
+	for _, zoneId in ipairs({ "StarterMeadow", "GreenhouseValley", "MysticGrove" }) do
+		for _, plantId in ipairs(PlantConfig.OrderByZone[zoneId] or {}) do
+			local plant = PlantConfig[plantId]
+			if plant then
+				table.insert(catalog, {
+					id = plant.id,
+					displayName = plant.displayName,
+					zone = plant.zone,
+					rarity = plant.rarity,
+					seedPrice = plant.seedPrice,
+					growTimeSeconds = plant.growTimeSeconds,
+					baseSellValue = plant.baseSellValue,
+					passiveIncomePerCycle = plant.passiveIncomePerCycle,
+					color = plant.color,
+				})
+			end
+		end
+	end
+	return catalog
+end
 
 return PlantConfig

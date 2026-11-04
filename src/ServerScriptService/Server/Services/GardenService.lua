@@ -4,8 +4,8 @@
 	Responsable de:
 	  - Asignar a cada jugador una parcela de terreno física en Workspace
 	    (su "jardín"), separada de la de los demás jugadores.
-	  - Crear los Parts de cada plot (parcela individual para una planta)
-	    según GardenConfig y el nivel de jardín guardado en su perfil.
+	  - Crear los Parts de cultivo y ampliar el patio vallado cuando se
+	    ocupan las parcelas disponibles.
 	  - Gestionar la mejora de nivel de jardín (cobra Cash vía EconomyService).
 
 	No conoce nada de plantas ni de robo: eso vive en PlantService / StealService,
@@ -74,6 +74,83 @@ local function createPlotPart(player: Player, plotIndex: number, position: Vecto
 	return part
 end
 
+local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount: number, minimumRows: number?)
+	local decor = gardenModel:FindFirstChild("Decor")
+	if decor then
+		for _, child in ipairs(decor:GetChildren()) do
+			if child.Name == "SoilPad" or child.Name == "Rail" or child.Name == "Post" or child.Name == "GatePost" then
+				child:Destroy()
+			end
+		end
+	end
+
+	local oldYard = gardenModel:FindFirstChild("YardBoundary")
+	if oldYard then
+		oldYard:Destroy()
+	end
+	local yard = Instance.new("Folder")
+	yard.Name = "YardBoundary"
+	yard.Parent = gardenModel
+
+	local rowCount = math.max(4, math.ceil(plotCount / 4), minimumRows or 0)
+	local frontZ = -7
+	local backZ = math.max(37, (rowCount - 1) * GardenConfig.PlotSpacing + 7)
+	local depth = backZ - frontZ
+	local centerZ = (frontZ + backZ) / 2
+	local wood = Color3.fromRGB(165, 120, 75)
+
+	local floor = Instance.new("Part")
+	floor.Name = "GardenFloor"
+	floor.Anchored = true
+	floor.Size = Vector3.new(44, 0.4, depth)
+	floor.Position = origin + Vector3.new(15, -0.25, centerZ)
+	floor.Material = Enum.Material.Ground
+	floor.Color = Color3.fromRGB(120, 85, 55)
+	floor.Parent = yard
+
+	local function rail(size: Vector3, offset: Vector3)
+		local part = Instance.new("Part")
+		part.Name = "FenceRail"
+		part.Anchored = true
+		part.Size = size
+		part.Position = origin + offset
+		part.Material = Enum.Material.Wood
+		part.Color = wood
+		part.Parent = yard
+	end
+
+	rail(Vector3.new(44, 0.5, 0.5), Vector3.new(15, 2.2, backZ))
+	rail(Vector3.new(0.5, 0.5, depth), Vector3.new(-7, 2.2, centerZ))
+	rail(Vector3.new(0.5, 0.5, depth), Vector3.new(37, 2.2, centerZ))
+	rail(Vector3.new(15, 0.5, 0.5), Vector3.new(0.5, 2.2, frontZ))
+	rail(Vector3.new(15, 0.5, 0.5), Vector3.new(29.5, 2.2, frontZ))
+
+	for x = -7, 37, 8 do
+		for _, z in ipairs({ frontZ, backZ }) do
+			local post = Instance.new("Part")
+			post.Name = "FencePost"
+			post.Anchored = true
+			post.Size = Vector3.new(0.9, 3.4, 0.9)
+			post.Position = origin + Vector3.new(x, 1.7, z)
+			post.Material = Enum.Material.Wood
+			post.Color = wood
+			post.Parent = yard
+		end
+	end
+	for z = frontZ, backZ, 8.5 do
+		for _, x in ipairs({ -7, 37 }) do
+			local post = Instance.new("Part")
+			post.Name = "FencePost"
+			post.Anchored = true
+			post.Size = Vector3.new(0.9, 3.4, 0.9)
+			post.Position = origin + Vector3.new(x, 1.7, z)
+			post.Material = Enum.Material.Wood
+			post.Color = wood
+			post.Parent = yard
+		end
+	end
+end
+
 -- Crea (si faltan) los plots hasta llegar a targetPlotCount. Nunca destruye
 -- plots existentes: así una mejora de jardín no interrumpe plantas que ya
 -- están creciendo.
@@ -99,6 +176,7 @@ local function ensurePlotsExist(player: Player, gardenModel: Model, targetPlotCo
 			GardenService.PlotCreated:Fire(player, plotIndex, part)
 		end
 	end
+	rebuildGardenYard(gardenModel, gardenModel:GetPivot().Position, targetPlotCount)
 end
 
 -- Construye o actualiza el jardín físico del jugador según su perfil.
@@ -115,6 +193,7 @@ function GardenService.AssignGarden(player: Player)
 
 	local gardenModel = Instance.new("Model")
 	gardenModel.Name = "Garden_" .. player.UserId
+	gardenModel:SetAttribute("OwnerUserId", player.UserId)
 	gardenModel:PivotTo(CFrame.new(origin))
 	gardenModel.Parent = gardensFolder
 	gardenModelByUser[player.UserId] = gardenModel
@@ -130,8 +209,44 @@ function GardenService.AssignGarden(player: Player)
 	baseMarker.Position = origin
 	baseMarker.Parent = gardenModel
 
+	local incubator = Instance.new("Model")
+	incubator.Name = "PetIncubator"
+	incubator.Parent = gardenModel
+	local incubatorBase = Instance.new("Part")
+	incubatorBase.Name = "IncubatorBase"
+	incubatorBase.Anchored = true
+	incubatorBase.Size = Vector3.new(4, 2, 4)
+	incubatorBase.Position = origin + Vector3.new(30, 0.95, 1)
+	incubatorBase.Material = Enum.Material.Wood
+	incubatorBase.Color = Color3.fromRGB(143, 95, 57)
+	incubatorBase.Parent = incubator
+	local eggCradle = Instance.new("Part")
+	eggCradle.Name = "EggCradle"
+	eggCradle.Anchored = true
+	eggCradle.CanCollide = false
+	eggCradle.Size = Vector3.new(2.2, 1.5, 2.2)
+	eggCradle.Position = origin + Vector3.new(30, 2.4, 1)
+	eggCradle.Material = Enum.Material.Neon
+	eggCradle.Color = Color3.fromRGB(255, 207, 99)
+	eggCradle.Parent = incubator
+	local incubatorPrompt = Instance.new("ProximityPrompt")
+	incubatorPrompt.Name = "IncubatorPrompt"
+	incubatorPrompt:SetAttribute("OwnerUserId", player.UserId)
+	incubatorPrompt.ActionText = "Open"
+	incubatorPrompt.ObjectText = "Pet Incubator"
+	incubatorPrompt.HoldDuration = 0
+	incubatorPrompt.MaxActivationDistance = 10
+	incubatorPrompt.RequiresLineOfSight = false
+	incubatorPrompt.Parent = incubatorBase
+
+	local highestSavedPlot = 0
+	for plotIndex in pairs(profile.plots or {}) do
+		if type(plotIndex) == "number" then
+			highestSavedPlot = math.max(highestSavedPlot, plotIndex)
+		end
+	end
 	local levelData = GardenConfig.Levels[profile.gardenLevel] or GardenConfig.Levels[1]
-	ensurePlotsExist(player, gardenModel, levelData.plotCount)
+	ensurePlotsExist(player, gardenModel, math.max(levelData.plotCount, highestSavedPlot + 1))
 end
 
 function GardenService.GetPlotPart(player: Player, plotIndex: number): BasePart?
@@ -147,12 +262,116 @@ function GardenService.GetGardenModel(player: Player): Model?
 end
 
 function GardenService.GetCurrentPlotCount(player: Player): number
-	local profile = DataService.GetProfile(player)
-	if not profile then
-		return 0
+	local userPlots = plotPartsByUser[player.UserId]
+	local highest = 0
+	if userPlots then
+		for plotIndex in pairs(userPlots) do
+			highest = math.max(highest, plotIndex)
+		end
 	end
-	local levelData = GardenConfig.Levels[profile.gardenLevel] or GardenConfig.Levels[1]
-	return levelData.plotCount
+	return highest
+end
+
+function GardenService.GetYardPosition(player: Player, position: Vector3): Vector3?
+	local garden = gardenModelByUser[player.UserId]
+	local floor = garden and garden:FindFirstChild("YardBoundary")
+		and garden.YardBoundary:FindFirstChild("GardenFloor")
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local function finite(value: number): boolean
+		return value == value and value > -1_000_000 and value < 1_000_000
+	end
+	if not finite(position.X) or not finite(position.Y) or not finite(position.Z)
+		or not garden or not floor or not floor:IsA("BasePart") or not root
+		or (root.Position - position).Magnitude > 55 then
+		return nil
+	end
+
+	local localPosition = floor.CFrame:PointToObjectSpace(position)
+	if math.abs(localPosition.X) > floor.Size.X / 2 - 4.5
+		or math.abs(localPosition.Z) > floor.Size.Z / 2 - 4.5 then
+		return nil
+	end
+	return floor.CFrame:PointToWorldSpace(Vector3.new(localPosition.X, floor.Size.Y / 2, localPosition.Z))
+end
+
+function GardenService.PlaceEmptyPlotAt(player: Player, position: Vector3): number?
+	local profile = DataService.GetProfile(player)
+	local garden = gardenModelByUser[player.UserId]
+	local userPlots = plotPartsByUser[player.UserId]
+	local yardPosition = GardenService.GetYardPosition(player, position)
+	if not profile or not garden or not userPlots or not yardPosition then
+		return nil
+	end
+
+	local selectedIndex: number? = nil
+	local selectedPart: BasePart? = nil
+	local nearestDistance = math.huge
+	for plotIndex, plotPart in pairs(userPlots) do
+		if profile.plots[plotIndex] == nil then
+			local distance = (plotPart.Position - yardPosition).Magnitude
+			if distance < nearestDistance then
+				selectedIndex = plotIndex
+				selectedPart = plotPart
+				nearestDistance = distance
+			end
+		end
+	end
+	if not selectedIndex or not selectedPart then
+		return nil
+	end
+
+	local snappedX = math.floor(yardPosition.X * 2 + 0.5) / 2
+	local snappedZ = math.floor(yardPosition.Z * 2 + 0.5) / 2
+	local destination = Vector3.new(snappedX, selectedPart.Position.Y, snappedZ)
+	for otherIndex, otherPart in pairs(userPlots) do
+		if otherIndex ~= selectedIndex and profile.plots[otherIndex] ~= nil
+			and (otherPart.Position - destination).Magnitude < 8 then
+			return nil
+		end
+	end
+	local gardenOrigin = garden:GetPivot().Position
+	for placedIndex, plant in ipairs(profile.placedPlants or {}) do
+		local savedPosition = plant.position
+		local localPosition = if type(savedPosition) == "table" and type(savedPosition.x) == "number" and type(savedPosition.z) == "number"
+			then Vector3.new(savedPosition.x, 0, savedPosition.z)
+			else Vector3.new(-5, 0, (placedIndex - 1) * 5 - 4)
+		local plantPosition = gardenOrigin + localPosition
+		if (plantPosition - destination).Magnitude < 4.5 then
+			return nil
+		end
+	end
+	selectedPart.Position = destination
+	return selectedIndex
+end
+
+function GardenService.EnsureAvailablePlot(player: Player)
+	local profile = DataService.GetProfile(player)
+	local gardenModel = gardenModelByUser[player.UserId]
+	local userPlots = plotPartsByUser[player.UserId]
+	if not profile or not gardenModel or not userPlots then
+		return
+	end
+
+	for plotIndex in pairs(userPlots) do
+		if profile.plots[plotIndex] == nil then
+			return
+		end
+	end
+
+	ensurePlotsExist(player, gardenModel, GardenService.GetCurrentPlotCount(player) + 1)
+end
+
+function GardenService.ExpandGardenForPlants(player: Player, activePlantCount: number)
+	local gardenModel = gardenModelByUser[player.UserId]
+	if not gardenModel then
+		return
+	end
+	rebuildGardenYard(
+		gardenModel,
+		gardenModel:GetPivot().Position,
+		GardenService.GetCurrentPlotCount(player),
+		activePlantCount + 1
+	)
 end
 
 -- Sube el nivel de jardín del jugador si tiene Cash suficiente.

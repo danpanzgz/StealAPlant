@@ -1,25 +1,34 @@
 --!strict
 --[[
 	ClientState.lua
-	Cache local NO autoritativo del inventario del jugador, usado solo
-	para pintar la UI al instante (evita esperar un roundtrip al servidor
-	cada vez que se abre un panel). El servidor sigue siendo la única
-	fuente de verdad: si hay discrepancia, el servidor gana y el cliente
-	se corrige en la siguiente respuesta.
+	Cache local NO autoritativa, usada solo para pintar la UI al instante.
+	El servidor es la única fuente de verdad: el inventario se reemplaza
+	completo con cada evento InventoryUpdated.
 ]]
 
 local ClientState = {}
 
-ClientState.Inventory = {} :: { [string]: number }
+ClientState.Inventory = {
+	seeds = {},
+	plants = {},
+	gear = {},
+	pets = {},
+	petEggs = {},
+	seedPacks = {},
+} :: any
 ClientState.Cash = 0
+ClientState.GardenLevel = 1
+ClientState.Defenses = {} :: { any }
+ClientState.Passes = {} :: { [string]: boolean }
+ClientState.PlacedPlants = {} :: { any }
+ClientState.EquippedGear = {} :: { [string]: boolean }
 
-function ClientState.SetInventoryFromSnapshot(inventory: { [string]: number })
-	ClientState.Inventory = inventory or {}
+function ClientState.SetInventoryFromSnapshot(inventory: any)
+	ClientState.Inventory = inventory or { seeds = {}, plants = {}, gear = {}, pets = {}, petEggs = {}, seedPacks = {} }
 end
 
-function ClientState.AdjustInventory(plantId: string, delta: number)
-	local current = ClientState.Inventory[plantId] or 0
-	ClientState.Inventory[plantId] = math.max(0, current + delta)
-end
+-- Obsoleto: el servidor empuja el inventario real (InventoryUpdated).
+-- Se mantiene como no-op para no romper controladores antiguos.
+function ClientState.AdjustInventory(_plantId: string, _delta: number) end
 
 return ClientState

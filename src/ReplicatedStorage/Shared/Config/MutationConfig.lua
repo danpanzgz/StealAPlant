@@ -1,11 +1,9 @@
 --!strict
 --[[
 	MutationConfig.lua
-	Define las 5 mutaciones del juego. Una planta puede tener 0 o 1 mutación
-	(en esta primera versión; el sistema está preparado para múltiples si se
-	necesita en el futuro).
-	Las mutaciones son puramente estéticas/de valor: no generan contenido
-	violento ni gráfico, solo cambian color/valor.
+	Las flores nuevas pueden no tener mutación o tener Gold/Diamond. Las
+	entradas antiguas se mantienen para conservar la apariencia de perfiles
+	ya guardados.
 ]]
 
 export type MutationData = {
@@ -61,5 +59,25 @@ local MutationConfig: { [string]: MutationData } = {
 }
 
 MutationConfig.Order = { "Wet", "Frozen", "Shiny", "Golden", "Rainbow" } :: any
+
+-- New plants use the requested mutation set. Legacy entries above remain
+-- readable so already-saved crops keep their appearance after migration.
+MutationConfig.Gold = {
+	id = "Gold",
+	displayName = "Gold",
+	color = Color3.fromRGB(255, 213, 74),
+	valueMultiplier = 2,
+	chance = 0.035,
+	weatherTag = nil,
+}
+MutationConfig.Diamond = {
+	id = "Diamond",
+	displayName = "Diamond",
+	color = Color3.fromRGB(125, 235, 255),
+	valueMultiplier = 5,
+	chance = 0.005,
+	weatherTag = nil,
+}
+MutationConfig.Order = { "Diamond", "Gold" } :: any
 
 return MutationConfig

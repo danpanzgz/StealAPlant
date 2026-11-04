@@ -1,8 +1,8 @@
 --!strict
 --[[
 	RarityConfig.lua
-	Define las 5 rarezas del juego. Cada planta referencia una de estas claves.
-	Modificar "weight" cambia la probabilidad relativa en cofres/recompensas de rareza.
+	Define las rarezas de semillas y flores. Un peso relativo menor aparece
+	con menos frecuencia en los packs.
 ]]
 
 export type RarityData = {
@@ -55,9 +55,25 @@ local RarityConfig: { [string]: RarityData } = {
 		sellMultiplier = 8.0,
 		weight = 2,
 	},
+	Mythic = {
+		id = "Mythic",
+		displayName = "Mythic",
+		order = 6,
+		color = Color3.fromRGB(255, 91, 158),
+		sellMultiplier = 14,
+		weight = 0.45,
+	},
+	Celestial = {
+		id = "Celestial",
+		displayName = "Celestial",
+		order = 7,
+		color = Color3.fromRGB(120, 225, 255),
+		sellMultiplier = 25,
+		weight = 0.08,
+	},
 }
 
 -- Orden fijo, útil para la UI (tienda, inventario, filtros)
-RarityConfig.Order = { "Common", "Uncommon", "Rare", "Epic", "Legendary" } :: any
+RarityConfig.Order = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Celestial" } :: any
 
 return RarityConfig

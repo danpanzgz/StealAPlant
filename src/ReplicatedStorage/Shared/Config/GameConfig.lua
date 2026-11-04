@@ -11,7 +11,7 @@ GameConfig.CurrencyName = "Cash"
 
 -- Ritmo de crecimiento / ticks del servidor
 GameConfig.GrowthTickInterval = 1 -- segundos entre chequeos de crecimiento de planta
-GameConfig.IncomeTickInterval = 5 -- segundos entre pagos de ingresos pasivos de plantas maduras
+GameConfig.IncomeTickInterval = 60 -- segundos entre pagos de flores colocadas
 
 -- Autosave / DataStore
 GameConfig.AutosaveInterval = 120 -- segundos
@@ -32,6 +32,14 @@ GameConfig.MaxDefensesPerGarden = 3
 
 -- Jardines
 GameConfig.DefaultPlotsUnlocked = 4
+
+-- Rebirth / reinicio de progreso
+GameConfig.RebirthBaseCost = 25000
+GameConfig.RebirthCostMultiplier = 1.8
+GameConfig.RebirthCashBonus = 0.2
+GameConfig.MaxOfflineEarningsMinutes = 180
+GameConfig.MaxOfflineEarningsCash = 100000
+GameConfig.OfflineEarningsPerMinute = 3
 
 -- Recompensa diaria
 GameConfig.DailyRewardResetHours = 24
