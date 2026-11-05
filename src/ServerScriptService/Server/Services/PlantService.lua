@@ -11,7 +11,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 
 local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
 local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
@@ -19,6 +18,7 @@ local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local PlantInstanceConfig = require(ReplicatedStorage.Shared.Config.PlantInstanceConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
+local PlantModels = require(ReplicatedStorage.Shared.Modules.PlantModels)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
@@ -209,157 +209,21 @@ local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: numbe
 	model.Name = "PlantVisual"
 
 	local sizeMultiplier = (PlantInstanceConfig.Sizes[sizeId or "Normal"] or PlantInstanceConfig.Sizes.Normal).multiplier
-	local stageGrowth = 0.24 + 0.76 * ((stage - 1) / math.max(stageCount - 1, 1))
-	local scale = stageGrowth * sizeMultiplier
 	local fruitColor = if mutation then MutationConfig[mutation].color else plantData.color
-	local leafColor = Color3.fromRGB(82, 157, 73)
-	local leafLight = Color3.fromRGB(118, 190, 83)
-	local stemColor = Color3.fromRGB(91, 126, 62)
 	local position = plotPart.Position
-
-	local function stageBlock(
-		requiredStage: number,
-		name: string,
-		offset: Vector3,
-		size: Vector3,
-		color: Color3,
-		material: Enum.Material?
-	)
-		if stage >= requiredStage then
-			return addCropBlock(model, name, position, offset, size, color, scale, material)
-		end
-		return nil
-	end
 
 	addCropBlock(model, "TilledSoil", position, Vector3.new(0, 0, 0), Vector3.new(7.5, 0.18, 7.5), Color3.fromRGB(112, 76, 48), 1)
 	for furrow = -1, 1 do
 		addCropBlock(model, "SoilFurrow", position, Vector3.new(furrow * 2.2, 0.04, 0), Vector3.new(0.13, 0.04, 6.8), Color3.fromRGB(78, 53, 38), 1)
 	end
 
-	local stem = addCropBlock(model, "CropStem", position, Vector3.new(0, 0.9, 0), Vector3.new(0.38, 1.45, 0.38), stemColor, scale)
 	local plantId = plantData.id
-	local leaves = if plantId == "Cactus" or plantId == "Dragonfruit" then {
-		{ Vector3.new(0, 1.25, 0), Vector3.new(0.9, 0.3, 0.9) },
-	} elseif plantId == "Corn" or plantId == "Pineapple" or plantId == "Coconut" then {
-		{ Vector3.new(-0.5, 0.95, 0), Vector3.new(1.1, 0.26, 0.5) },
-		{ Vector3.new(0.5, 1.25, 0), Vector3.new(1.1, 0.26, 0.5) },
-		{ Vector3.new(0, 1.55, 0), Vector3.new(0.7, 0.26, 0.7) },
-	} elseif plantId == "Sunflower" or plantId == "EmberRose" or plantId == "Moonflower"
-		or plantId == "CelestialOrchid" or plantId == "PhoenixBloom" or plantId == "CosmicPeony"
-		or plantId == "AuroraLotus" then {
-		{ Vector3.new(-0.78, 0.68, 0), Vector3.new(0.8, 0.22, 0.44) },
-		{ Vector3.new(0.78, 0.68, 0), Vector3.new(0.8, 0.22, 0.44) },
-	} else {
-		{ Vector3.new(-0.72, 0.72, 0), Vector3.new(1.0, 0.3, 0.58) },
-		{ Vector3.new(0.72, 1.03, 0), Vector3.new(1.0, 0.3, 0.58) },
-		{ Vector3.new(0, 1.38, 0.62), Vector3.new(0.7, 0.28, 0.7) },
-	}
-	for index, leaf in ipairs(leaves) do
-		addCropBlock(
-			model,
-			"VoxelLeaf",
-			position,
-			leaf[1],
-			leaf[2],
-			if index == 2 then leafLight else leafColor,
-			scale
-		)
-	end
-
-	if plantId == "Carrot" then
-		for layer = 1, 4 do
-			local width = 0.92 - layer * 0.16
-			stageBlock(if layer < 3 then 2 else 3, "CarrotRoot", Vector3.new(0, 0.32 + layer * 0.3, 0), Vector3.new(width, 0.34, width), fruitColor)
-		end
-	elseif plantId == "Potato" then
-		for index, offset in ipairs({
-			Vector3.new(-0.38, 0.36, 0),
-			Vector3.new(0.3, 0.44, 0.28),
-			Vector3.new(0.05, 0.32, -0.34),
-		}) do
-			stageBlock(if index == 1 then 2 else 3, "PotatoTuber", offset, Vector3.new(0.72, 0.58, 0.66), fruitColor)
-		end
-	elseif plantId == "Corn" then
-		stageBlock(2, "CornStalk", Vector3.new(0, 1.75, 0), Vector3.new(0.5, 2.5, 0.5), stemColor)
-		stageBlock(3, "CornCob", Vector3.new(0.48, 1.3, -0.12), Vector3.new(0.64, 1.25, 0.68), fruitColor)
-		stageBlock(3, "CornHusk", Vector3.new(0.4, 1.2, -0.5), Vector3.new(0.28, 1.45, 0.3), leafColor)
-	elseif plantId == "Pumpkin" or plantId == "Watermelon" then
-		local largeColor = if plantId == "Pumpkin" then fruitColor else Color3.fromRGB(63, 154, 75)
-		stageBlock(2, "LargeCropFruit", Vector3.new(0, 0.55, 0), Vector3.new(1.9, 1.35, 1.8), largeColor)
-		stageBlock(3, "FruitStem", Vector3.new(0, 1.38, 0), Vector3.new(0.28, 0.48, 0.28), stemColor)
-		for side = -1, 1 do
-			local stripeColor = if plantId == "Pumpkin" then Color3.fromRGB(221, 100, 34) else Color3.fromRGB(34, 111, 58)
-			stageBlock(3, "FruitRib", Vector3.new(side * 0.58, 0.57, -0.93), Vector3.new(0.17, 1.12, 0.08), stripeColor)
-		end
-	elseif plantId == "Cactus" or plantId == "Dragonfruit" then
-		addCropBlock(model, "CactusBody", position, Vector3.new(0, 1.3, 0), Vector3.new(0.86, 2.45, 0.86), Color3.fromRGB(66, 157, 86), scale)
-		stageBlock(2, "CactusArmLeft", Vector3.new(-0.8, 1.28, 0), Vector3.new(0.42, 0.36, 0.42), Color3.fromRGB(76, 174, 91))
-		stageBlock(3, "CactusArmRight", Vector3.new(0.8, 1.55, 0), Vector3.new(0.42, 0.36, 0.42), Color3.fromRGB(76, 174, 91))
-		if plantId == "Dragonfruit" then
-			stageBlock(3, "Dragonfruit", Vector3.new(0.55, 2.55, 0), Vector3.new(0.75, 0.72, 0.75), fruitColor)
-			stageBlock(3, "FruitLeaf", Vector3.new(0.55, 3.0, 0), Vector3.new(0.34, 0.28, 0.34), leafLight)
-		end
-	elseif plantId == "Pineapple" then
-		stageBlock(2, "PineappleFruit", Vector3.new(0, 1.12, 0), Vector3.new(1.15, 1.8, 1.15), fruitColor)
-		for index = -1, 1 do
-			stageBlock(3, "PineappleCrown", Vector3.new(index * 0.35, 2.35 + (1 - math.abs(index)) * 0.3, 0), Vector3.new(0.28, 0.95, 0.3), leafColor)
-		end
-	elseif plantId == "Coconut" then
-		addCropBlock(model, "PalmTrunk", position, Vector3.new(0, 1.35, 0), Vector3.new(0.55, 2.5, 0.55), Color3.fromRGB(134, 93, 59), scale)
-		for index, offset in ipairs({ Vector3.new(-0.7, 2.65, 0), Vector3.new(0, 2.95, 0), Vector3.new(0.7, 2.65, 0) }) do
-			addCropBlock(model, "PalmFrond", position, offset, Vector3.new(1.35, 0.22, 0.48), if index == 2 then leafLight else leafColor, scale)
-		end
-		stageBlock(3, "CoconutFruit", Vector3.new(0.45, 2.15, 0.38), Vector3.new(0.62, 0.62, 0.62), fruitColor)
-	elseif plantId == "Tomato" or plantId == "Strawberry" or plantId == "Blueberry" or plantId == "Grape" then
-		local fruitSize = if plantId == "Grape" or plantId == "Blueberry" then 0.48 else 0.68
-		for index, offset in ipairs({
-			Vector3.new(-0.52, 0.55, -0.28),
-			Vector3.new(0.45, 0.68, 0.12),
-			Vector3.new(0, 1.15, -0.3),
-			Vector3.new(0.3, 0.35, 0.42),
-		}) do
-			stageBlock(if index <= 2 then 2 else 3, "Fruit", offset, Vector3.new(fruitSize, fruitSize, fruitSize), fruitColor)
-			if (plantId == "Tomato" or plantId == "Strawberry") and index <= 2 then
-				stageBlock(3, "FruitCalyx", offset + Vector3.new(0, fruitSize * 0.55, 0), Vector3.new(0.35, 0.14, 0.35), leafColor)
-			end
-		end
-		if plantId == "Strawberry" then
-			stageBlock(3, "StrawberryCrown", Vector3.new(0, 1.55, 0), Vector3.new(0.38, 0.5, 0.38), leafLight)
-		end
-	elseif plantId == "Sunflower" then
-		stageBlock(2, "SunflowerStem", Vector3.new(0, 1.85, 0), Vector3.new(0.36, 3.3, 0.36), stemColor)
-		stageBlock(3, "SunflowerHead", Vector3.new(0, 3.55, 0), Vector3.new(0.76, 0.76, 0.76), Color3.fromRGB(104, 71, 41))
-		for index = 1, 4 do
-			local offset = if index == 1 then Vector3.new(-0.72, 3.55, 0)
-				elseif index == 2 then Vector3.new(0.72, 3.55, 0)
-				elseif index == 3 then Vector3.new(0, 3.55, -0.72)
-				else Vector3.new(0, 3.55, 0.72)
-			stageBlock(3, "SunflowerPetal", offset, Vector3.new(0.55, 0.5, 0.55), fruitColor)
-		end
-	elseif plantId == "Starfruit" then
-		stageBlock(2, "StarfruitCenter", Vector3.new(0, 1.6, 0), Vector3.new(0.7, 0.7, 0.7), fruitColor)
-		for index = 1, 5 do
-			local angle = (index - 1) * math.pi * 2 / 5
-			stageBlock(3, "StarfruitPoint", Vector3.new(math.cos(angle) * 0.8, 1.6, math.sin(angle) * 0.8), Vector3.new(0.48, 0.48, 0.48), fruitColor)
-		end
-	elseif plantId == "CelestialOrchid" or plantId == "PhoenixBloom" or plantId == "EmberRose" or plantId == "Moonflower" or plantId == "CosmicPeony" or plantId == "AuroraLotus" or plantId == "CrystalBerry" then
-		stageBlock(2, "BlossomCenter", Vector3.new(0, 1.75, 0), Vector3.new(0.72, 0.72, 0.72), fruitColor, if mutation then Enum.Material.Neon else nil)
-		for index = 1, 4 do
-			local offset = if index == 1 then Vector3.new(-0.65, 1.75, 0)
-				elseif index == 2 then Vector3.new(0.65, 1.75, 0)
-				elseif index == 3 then Vector3.new(0, 1.75, -0.65)
-				else Vector3.new(0, 1.75, 0.65)
-			stageBlock(3, "BlossomPetal", offset, Vector3.new(0.58, 0.42, 0.58), fruitColor)
-		end
-	else
-		for index, offset in ipairs({
-			Vector3.new(-0.5, 0.55, 0),
-			Vector3.new(0.5, 0.72, 0.18),
-			Vector3.new(0, 1.35, -0.24),
-		}) do
-			stageBlock(2, "CropFruit", offset, Vector3.new(0.76, 0.76, 0.76), fruitColor, if mutation then Enum.Material.Neon else nil)
-		end
-	end
+	local progress = (stage - 1) / math.max(stageCount - 1, 1)
+	local stem, plantHeight = PlantModels.Build(model, plantId, position + Vector3.new(0, 0.67, 0), progress, {
+		fruitColor = fruitColor,
+		mutated = mutation ~= false,
+		scale = sizeMultiplier,
+	})
 
 	model.PrimaryPart = stem
 	if stage >= stageCount then
@@ -403,20 +267,12 @@ local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: numbe
 		glow.Range = if mutation == "Diamond" then 10 else 7
 		glow.Parent = stem
 
-		for _, descendant in ipairs(model:GetChildren()) do
-			if descendant:IsA("BasePart")
-				and (string.find(descendant.Name, "Fruit")
-					or string.find(descendant.Name, "Blossom")
-					or string.find(descendant.Name, "Root")) then
-				descendant.Material = Enum.Material.Neon
-			end
-		end
 	end
 
 	-- Indicador de progreso sobre la planta
 	local gui = Instance.new("BillboardGui")
 	gui.Size = UDim2.fromOffset(120, 26)
-	gui.StudsOffset = Vector3.new(0, 4.3 * scale + 1.2, 0)
+	gui.StudsOffset = Vector3.new(0, plantHeight + 1.2, 0)
 	gui.MaxDistance = 60
 	gui.Adornee = stem
 	gui.Parent = stem
@@ -701,72 +557,23 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	model:SetAttribute("PlantUid", plant.uid)
 	model.Parent = folder
 
-	local stem = Instance.new("Part")
-	stem.Name = "Stem"
-	stem.Anchored = true
-	stem.CanCollide = false
-	stem.Size = Vector3.new(0.35, 2.1, 0.35) * scale
-	stem.Position = position + Vector3.new(0, stem.Size.Y / 2, 0)
-	stem.Material = Enum.Material.SmoothPlastic
-	stem.Color = Color3.fromRGB(66, 156, 77)
-	stem.Parent = model
+	local stem, plantHeight = PlantModels.Build(model, plant.plantId, position, 1, {
+		fruitColor = bloomColor,
+		mutated = mutationData ~= nil,
+		scale = scale * 0.75,
+	})
 
-	local function addBlock(name: string, size: Vector3, offset: Vector3, color: Color3)
-		local block = Instance.new("Part")
-		block.Name = name
-		block.Anchored = true
-		block.CanCollide = false
-		block.CanTouch = false
-		block.CanQuery = false
-		block.Size = size * scale
-		block.Position = position + offset * scale
-		block.Material = mutationData and Enum.Material.Neon or Enum.Material.SmoothPlastic
-		block.Color = color
-		block.Parent = model
-		return block
-	end
-
-	local bloom = addBlock("Bloom", Vector3.new(1.25, 1.25, 1.25), Vector3.new(0, 1.9, 0), bloomColor)
-	if plant.plantId == "Carrot" then
-		for layer = 1, 3 do
-			local width = 0.9 - layer * 0.2
-			addBlock("CarrotVoxel", Vector3.new(width, 0.38, width), Vector3.new(0, 1.55 - layer * 0.28, 0), bloomColor)
-		end
-	elseif plant.plantId == "Pumpkin" or plant.plantId == "Watermelon" then
-		bloom.Size = Vector3.new(1.9, 1.35, 1.8) * scale
-		for side = -1, 1 do
-			addBlock("FruitStripe", Vector3.new(0.16, 1.05, 0.12), Vector3.new(side * 0.55, 1.9, -0.91), if plant.plantId == "Pumpkin" then Color3.fromRGB(221, 100, 34) else Color3.fromRGB(34, 111, 58))
-		end
-	elseif plant.plantId == "Cactus" or plant.plantId == "Dragonfruit" then
-		bloom.Size = Vector3.new(0.82, 2.2, 0.82) * scale
-		bloom.Position = position + Vector3.new(0, 1.5 * scale, 0)
-		addBlock("CactusArm", Vector3.new(0.38, 0.9, 0.38), Vector3.new(0.68, 1.35, 0), Color3.fromRGB(76, 174, 91))
-	elseif plant.plantId == "Corn" or plant.plantId == "Pineapple" or plant.plantId == "Coconut" then
-		bloom.Size = Vector3.new(0.88, 1.65, 0.88) * scale
-		addBlock("TallLeafLeft", Vector3.new(0.28, 1.1, 0.3), Vector3.new(-0.45, 2.6, 0), Color3.fromRGB(90, 177, 80))
-		addBlock("TallLeafRight", Vector3.new(0.28, 1.1, 0.3), Vector3.new(0.45, 2.6, 0), Color3.fromRGB(78, 162, 77))
-	elseif plant.plantId == "Sunflower" or plant.plantId == "EmberRose" or plant.plantId == "Moonflower"
-		or plant.plantId == "CelestialOrchid" or plant.plantId == "PhoenixBloom" or plant.plantId == "CosmicPeony"
-		or plant.plantId == "AuroraLotus" then
-		bloom.Size = Vector3.new(0.65, 0.65, 0.65) * scale
-		for _, offset in ipairs({
-			Vector3.new(-0.6, 1.9, 0),
-			Vector3.new(0.6, 1.9, 0),
-			Vector3.new(0, 1.9, -0.6),
-			Vector3.new(0, 1.9, 0.6),
-		}) do
-			addBlock("SquarePetal", Vector3.new(0.52, 0.4, 0.52), offset, bloomColor)
-		end
-	elseif plant.plantId == "Tomato" or plant.plantId == "Strawberry" or plant.plantId == "Blueberry" or plant.plantId == "Grape" or plant.plantId == "CrystalBerry" then
-		bloom.Size = Vector3.new(0.7, 0.7, 0.7) * scale
-		for _, offset in ipairs({
-			Vector3.new(-0.55, 1.45, 0),
-			Vector3.new(0.5, 1.65, 0.2),
-			Vector3.new(0, 2.15, -0.25),
-		}) do
-			addBlock("BerryCluster", Vector3.new(0.5, 0.5, 0.5), offset, bloomColor)
-		end
-	end
+	-- Hitbox invisible: sostiene el prompt y la etiqueta.
+	local bloom = Instance.new("Part")
+	bloom.Name = "Bloom"
+	bloom.Anchored = true
+	bloom.CanCollide = false
+	bloom.CanTouch = false
+	bloom.CanQuery = true
+	bloom.Transparency = 1
+	bloom.Size = Vector3.new(3, math.max(plantHeight, 2), 3)
+	bloom.Position = position + Vector3.new(0, math.max(plantHeight, 2) / 2, 0)
+	bloom.Parent = model
 	model.PrimaryPart = stem
 	if mutationData then
 		local highlight = Instance.new("Highlight")
@@ -805,7 +612,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 
 	local labelGui = Instance.new("BillboardGui")
 	labelGui.Size = UDim2.fromOffset(150, 42)
-	labelGui.StudsOffset = Vector3.new(0, 1.6 * scale, 0)
+	labelGui.StudsOffset = Vector3.new(0, math.max(plantHeight, 2) / 2 + 1.2, 0)
 	labelGui.MaxDistance = 70
 	labelGui.Adornee = bloom
 	labelGui.Parent = bloom
@@ -832,13 +639,6 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 			PlantService.CollectCollectionPlant(player, plant.uid)
 		end
 	end)
-
-	local bob = TweenService:Create(
-		bloom,
-		TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Position = bloom.Position + Vector3.new(0, 0.25 * scale, 0) }
-	)
-	bob:Play()
 end
 
 local function rebuildPlacedPlants(player: Player)

@@ -37,7 +37,7 @@ local PetService = require(Server.Services.PetService)
 local SlapService = require(Server.Services.SlapService)
 
 MapBuilder.BuildWorld()
-StealService.CreateTutorialGarden(MapBuilder.PlazaCenter + Vector3.new(0, 0, 20))
+StealService.CreateTutorialGarden(MapBuilder.TutorialGardenCenter)
 
 RemoteHandlers.Init()
 MonetizationService.Init()
@@ -57,7 +57,7 @@ local function moveToGarden(player: Player)
 	end
 	local character = player.Character or player.CharacterAdded:Wait()
 	character:WaitForChild("HumanoidRootPart", 10)
-	local spawnPosition = garden:GetPivot().Position + Vector3.new(15, 4, -11)
+	local spawnPosition = GardenService.GetEntryPosition(garden, 4)
 	local plazaTarget = Vector3.new(MapBuilder.PlazaCenter.X, spawnPosition.Y, MapBuilder.PlazaCenter.Z)
 	character:PivotTo(CFrame.lookAt(spawnPosition, plazaTarget))
 end

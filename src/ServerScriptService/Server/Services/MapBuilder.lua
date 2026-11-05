@@ -9,7 +9,6 @@
 ]]
 
 local Lighting = game:GetService("Lighting")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterPlayer = game:GetService("StarterPlayer")
 local Workspace = game:GetService("Workspace")
@@ -18,10 +17,11 @@ local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
 local ZoneConfig = require(ReplicatedStorage.Shared.Config.ZoneConfig)
 
 local MapBuilder = {}
-local MAX_MAP_PART_WIDTH = 1800 -- Keep generated parts below Roblox's 2048-stud size limit.
 
 -- Plaza central (spawn inicial, tienda y vecino)
-MapBuilder.PlazaCenter = Vector3.new(-50, 0, 10)
+MapBuilder.PlazaCenter = GardenConfig.GetStreetCenter()
+-- Jardín "vecino" del tutorial: sobre el eje de la calle, junto al mercado.
+MapBuilder.TutorialGardenCenter = MapBuilder.PlazaCenter + Vector3.new(82, 0, 0)
 
 local function part(parent: Instance, name: string, size: Vector3, position: Vector3, color: Color3, material: Enum.Material?, canCollide: boolean?): Part
 	local p = Instance.new("Part")
@@ -36,30 +36,6 @@ local function part(parent: Instance, name: string, size: Vector3, position: Vec
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.Parent = parent
 	return p
-end
-
-local function horizontalStrip(
-	parent: Instance,
-	name: string,
-	startX: number,
-	endX: number,
-	y: number,
-	z: number,
-	depth: number,
-	height: number,
-	color: Color3,
-	material: Enum.Material,
-	canCollide: boolean?
-)
-	local x = startX
-	local index = 0
-	while x < endX do
-		index += 1
-		local width = math.min(MAX_MAP_PART_WIDTH, endX - x)
-		local partName = if index == 1 then name else name .. "_" .. index
-		part(parent, partName, Vector3.new(width, height, depth), Vector3.new(x + width / 2, y, z), color, material, canCollide)
-		x += width
-	end
 end
 
 local function billboard(adornee: BasePart, text: string, size: UDim2, offset: Vector3, maxDistance: number)
@@ -222,11 +198,38 @@ local function buildPlanter(parent: Instance, position: Vector3, size: Vector3, 
 	buildFlowerClump(parent, position + Vector3.new(0, 2.35, 1.5), Color3.fromRGB(161, 130, 240), 0.82)
 end
 
-function MapBuilder.BuildWorld()
-	local maxPlayers = math.max(Players.MaxPlayers, 8)
-	local lastGardenX = (maxPlayers - 1) * GardenConfig.GardenSlotSpacing
-	local minX, maxX = -115, lastGardenX + 70
+local COBBLE = Color3.fromRGB(203, 185, 153)
 
+local function buildArch(parent: Instance, position: Vector3, title: string)
+	local wood = Color3.fromRGB(150, 105, 65)
+	for _, dz in ipairs({ -17, 17 }) do
+		part(parent, "ArchPost", Vector3.new(1.6, 11, 1.6), position + Vector3.new(0, 5.5, dz), wood, Enum.Material.Wood, true)
+		part(parent, "ArchPostCap", Vector3.new(2.4, 0.7, 2.4), position + Vector3.new(0, 11.3, dz), Color3.fromRGB(102, 171, 83))
+	end
+	part(parent, "ArchBeam", Vector3.new(1.6, 1.4, 38), position + Vector3.new(0, 11.2, 0), wood, Enum.Material.Wood)
+	local board = part(parent, "ArchSign", Vector3.new(0.8, 4, 20), position + Vector3.new(0, 8.4, 0), Color3.fromRGB(255, 240, 200))
+	billboard(board, title, UDim2.fromOffset(220, 44), Vector3.new(0, 0, 0), 120)
+end
+
+local function scatterTrees(parent: Instance, rng: Random, count: number, area: { minX: number, maxX: number, minZ: number, maxZ: number }, avoid: { { cx: number, cz: number, r: number } })
+	local types = { "Oak", "Pine", "Cherry", "Birch" }
+	for _ = 1, count do
+		local x = rng:NextNumber(area.minX, area.maxX)
+		local z = rng:NextNumber(area.minZ, area.maxZ)
+		local blocked = false
+		for _, zone in ipairs(avoid) do
+			if (Vector2.new(x, z) - Vector2.new(zone.cx, zone.cz)).Magnitude < zone.r then
+				blocked = true
+				break
+			end
+		end
+		if not blocked then
+			buildTree(parent, Vector3.new(x, 0, z), rng:NextNumber(0.85, 1.2), types[rng:NextInteger(1, #types)])
+		end
+	end
+end
+
+function MapBuilder.BuildWorld()
 	local oldBase = Workspace:FindFirstChild("Baseplate")
 	if oldBase then
 		oldBase:Destroy()
@@ -236,7 +239,7 @@ function MapBuilder.BuildWorld()
 		oldMap:Destroy()
 	end
 
-	-- Personajes algo más rápidos: distancias entre jardines cómodas en móvil.
+	-- Distancias cómodas en móvil.
 	StarterPlayer.CharacterWalkSpeed = 20
 
 	-- Iluminación alegre
@@ -258,111 +261,86 @@ function MapBuilder.BuildWorld()
 	map.Name = "Map"
 	map.Parent = Workspace
 
-	local plaza = MapBuilder.PlazaCenter
+	local C = MapBuilder.PlazaCenter
+	local streetHalf = GardenConfig.StreetWidth / 2
+	local lastColumnX = (GardenConfig.GardensPerRow - 1) * GardenConfig.GardenSlotSpacing
+	local streetMinX = GardenConfig.YardMinX - 8
+	local streetMaxX = lastColumnX + GardenConfig.YardMaxX + 8
+	local southBackZ = GardenConfig.YardBackZ
+	local northFrontZ = GardenConfig.NorthRowZ + GardenConfig.YardFrontZ
 
-	-- A solid soil foundation keeps the whole play area safe; the grass cap
-	-- leaves a visible block edge and patch tiles vary the terrain palette.
-	horizontalStrip(map, "DirtFoundation", minX - 25, maxX + 65, -1, 0, 280, 2, Color3.fromRGB(126, 91, 61), Enum.Material.Ground, true)
-	horizontalStrip(map, "GrassSurface", minX - 23, maxX + 63, 0.08, 0, 276, 0.16, Color3.fromRGB(112, 190, 96), Enum.Material.Grass)
-	part(map, "SpawnPad", Vector3.new(70, 2, 70), plaza + Vector3.new(0, -1, 0), Color3.fromRGB(145, 228, 130), Enum.Material.Grass, true)
-	horizontalStrip(map, "MainRoad", minX, maxX, 0.22, -12, 12, 0.2, Color3.fromRGB(203, 185, 153), Enum.Material.Cobblestone)
-	part(map, "CrossRoad", Vector3.new(12, 0.2, 95), Vector3.new(plaza.X, 0.22, 0), Color3.fromRGB(203, 185, 153), Enum.Material.Cobblestone)
-	part(map, "EastPath", Vector3.new(26, 0.2, 12), Vector3.new(plaza.X + 34, 0.22, 12), Color3.fromRGB(203, 185, 153), Enum.Material.Cobblestone)
-	part(map, "WestPath", Vector3.new(26, 0.2, 12), Vector3.new(plaza.X - 34, 0.22, 12), Color3.fromRGB(203, 185, 153), Enum.Material.Cobblestone)
-	local terrainRandom = Random.new(7481)
-	for patchIndex = 1, 112 do
-		local x: number
-		local z: number
-		if patchIndex % 4 == 0 then
-			local outerSide = terrainRandom:NextInteger(0, 1) == 0
-			x = if outerSide then terrainRandom:NextNumber(-132, -105) else terrainRandom:NextNumber(lastGardenX + 44, lastGardenX + 125)
-			z = terrainRandom:NextNumber(44, 112)
-		else
-			x = terrainRandom:NextNumber(minX + 8, maxX - 8)
-			z = terrainRandom:NextNumber(-132, -40)
-		end
-		if (Vector2.new(x, z) - Vector2.new(-50, -55)).Magnitude > 27 then
-			local isSoil = terrainRandom:NextInteger(1, 4) == 1
-			local color = if isSoil
-				then Color3.fromRGB(terrainRandom:NextInteger(123, 151), terrainRandom:NextInteger(84, 108), terrainRandom:NextInteger(59, 76))
-				else Color3.fromRGB(terrainRandom:NextInteger(91, 125), terrainRandom:NextInteger(164, 195), terrainRandom:NextInteger(82, 111))
-			part(
-				map,
-				if isSoil then "ExposedSoilPatch" else "GrassPatch",
-				Vector3.new(terrainRandom:NextInteger(12, 26), 0.06, terrainRandom:NextInteger(10, 22)),
-				Vector3.new(x, 0.13, z),
-				color,
-				if isSoil then Enum.Material.Ground else Enum.Material.Grass
-			)
-			if not isSoil then
-				for tuft = 1, 3 do
-					part(
-						map,
-						"BlockyGrassTuft",
-						Vector3.new(terrainRandom:NextNumber(1.2, 2.4), terrainRandom:NextNumber(0.25, 0.55), terrainRandom:NextNumber(1.2, 2.4)),
-						Vector3.new(x + terrainRandom:NextNumber(-5, 5), 0.3, z + terrainRandom:NextNumber(-4, 4)),
-						Color3.fromRGB(terrainRandom:NextInteger(75, 111), terrainRandom:NextInteger(145, 179), terrainRandom:NextInteger(74, 102)),
-						Enum.Material.Grass
-					)
-				end
-			end
-		end
+	-- Suelo: base de tierra sólida + capa de césped (un solo bloque cada uno).
+	local minX, maxX, minZ, maxZ = -72, lastColumnX + 112, -175, GardenConfig.NorthRowZ + 62
+	local widthX, depthZ = maxX - minX, maxZ - minZ
+	part(map, "DirtFoundation", Vector3.new(widthX, 2, depthZ), Vector3.new((minX + maxX) / 2, -1, (minZ + maxZ) / 2), Color3.fromRGB(126, 91, 61), Enum.Material.Ground, true)
+	part(map, "GrassSurface", Vector3.new(widthX - 2, 0.16, depthZ - 2), Vector3.new((minX + maxX) / 2, 0.08, (minZ + maxZ) / 2), Color3.fromRGB(112, 190, 96), Enum.Material.Grass)
+
+	-- Muros invisibles: nadie se cae del mapa.
+	local function wall(size: Vector3, position: Vector3)
+		local w = part(map, "BoundaryWall", size, position, Color3.new(1, 1, 1), nil, true)
+		w.Transparency = 1
+		w.CanQuery = false
+	end
+	wall(Vector3.new(widthX, 80, 2), Vector3.new((minX + maxX) / 2, 40, minZ))
+	wall(Vector3.new(widthX, 80, 2), Vector3.new((minX + maxX) / 2, 40, maxZ))
+	wall(Vector3.new(2, 80, depthZ), Vector3.new(minX, 40, (minZ + maxZ) / 2))
+	wall(Vector3.new(2, 80, depthZ), Vector3.new(maxX, 40, (minZ + maxZ) / 2))
+
+	-- Calle central empedrada con bordillos de piedra.
+	local roadWidth = GardenConfig.StreetWidth - 4
+	part(map, "StreetEdge", Vector3.new(streetMaxX - streetMinX, 0.22, GardenConfig.StreetWidth), Vector3.new(C.X, 0.11, C.Z), Color3.fromRGB(162, 177, 133), Enum.Material.Slate)
+	part(map, "StreetRoad", Vector3.new(streetMaxX - streetMinX - 2, 0.26, roadWidth), Vector3.new(C.X, 0.14, C.Z), COBBLE, Enum.Material.Cobblestone)
+	-- Caminos a las dos puertas de cada jardín (empedrado hasta la calle).
+	for column = 0, GardenConfig.GardensPerRow - 1 do
+		local gateX = column * GardenConfig.GardenSlotSpacing + 15
+		part(map, "GatePathSouth", Vector3.new(12, 0.2, 5), Vector3.new(gateX, 0.12, southBackZ + 4.5), COBBLE, Enum.Material.Cobblestone)
+		part(map, "GatePathNorth", Vector3.new(12, 0.2, 5), Vector3.new(gateX, 0.12, northFrontZ - 4.5 + 0), COBBLE, Enum.Material.Cobblestone)
 	end
 
-	-- Plaza central más cuidada y accesible
-	part(map, "Plaza", Vector3.new(62, 0.35, 52), plaza + Vector3.new(0, 0.18, 0), Color3.fromRGB(233, 227, 209), Enum.Material.Pebble)
-	part(map, "PlazaRing", Vector3.new(48, 0.2, 38), plaza + Vector3.new(0, 0.25, 0), Color3.fromRGB(200, 195, 180), Enum.Material.Slate)
-	part(map, "PlazaCenterTile", Vector3.new(32, 0.12, 24), plaza + Vector3.new(0, 0.39, 0), Color3.fromRGB(241, 230, 199), Enum.Material.SmoothPlastic)
-	part(map, "PlazaCenterInset", Vector3.new(22, 0.08, 14), plaza + Vector3.new(0, 0.49, 0), Color3.fromRGB(208, 222, 164), Enum.Material.SmoothPlastic)
-	for _, xOffset in ipairs({ -28, 28 }) do
-		part(map, "PlazaBorderStone", Vector3.new(1.2, 0.42, 50), plaza + Vector3.new(xOffset, 0.34, 0), Color3.fromRGB(162, 177, 133), Enum.Material.Slate)
-	end
-	for _, zOffset in ipairs({ -24, 24 }) do
-		part(map, "PlazaBorderStone", Vector3.new(58, 0.42, 1.2), plaza + Vector3.new(0, 0.34, zOffset), Color3.fromRGB(162, 177, 133), Enum.Material.Slate)
-	end
-	part(map, "PlazaFlowerBedA", Vector3.new(14, 0.8, 7), plaza + Vector3.new(-18, 0.5, 10), Color3.fromRGB(90, 150, 80), Enum.Material.Grass)
-	part(map, "PlazaFlowerBedB", Vector3.new(14, 0.8, 7), plaza + Vector3.new(18, 0.5, 10), Color3.fromRGB(90, 150, 80), Enum.Material.Grass)
-	part(map, "PlazaFlowerBedC", Vector3.new(14, 0.8, 7), plaza + Vector3.new(0, 0.5, 18), Color3.fromRGB(90, 150, 80), Enum.Material.Grass)
-	for bedIndex, bedPosition in ipairs({
-		plaza + Vector3.new(-18, 0.9, 10),
-		plaza + Vector3.new(18, 0.9, 10),
-		plaza + Vector3.new(0, 0.9, 18),
+	-- Plaza central: losas, anillo y bordes, entre las dos filas de jardines.
+	part(map, "Plaza", Vector3.new(96, 0.3, roadWidth), Vector3.new(C.X, 0.3, C.Z), Color3.fromRGB(233, 227, 209), Enum.Material.Pebble)
+	part(map, "PlazaRing", Vector3.new(82, 0.2, roadWidth - 8), Vector3.new(C.X, 0.4, C.Z), Color3.fromRGB(200, 195, 180), Enum.Material.Slate)
+	part(map, "PlazaInset", Vector3.new(66, 0.12, roadWidth - 18), Vector3.new(C.X, 0.5, C.Z), Color3.fromRGB(241, 230, 199), Enum.Material.SmoothPlastic)
+
+	-- Mercado: las tres tiendas en fila sobre el eje de la calle (frente al sur).
+	buildShop(map, C + Vector3.new(-24, 0, 0), "Seeds", "SEED FARMER", Color3.fromRGB(102, 171, 83), Color3.fromRGB(114, 166, 87))
+	buildShop(map, C + Vector3.new(0, 0, 0), "Gear", "GEAR FARMER", Color3.fromRGB(93, 147, 202), Color3.fromRGB(102, 130, 168))
+	buildShop(map, C + Vector3.new(24, 0, 0), "Pets", "EGG FARMER", Color3.fromRGB(165, 119, 205), Color3.fromRGB(151, 110, 176))
+
+	-- Fuentes a ambos lados del mercado y parterres con flores.
+	buildFountain(map, C + Vector3.new(-50, 0, 0))
+	buildFountain(map, C + Vector3.new(50, 0, 0))
+	for index, offset in ipairs({
+		Vector3.new(-12, 0, 9), Vector3.new(12, 0, 9), Vector3.new(-12, 0, -9), Vector3.new(12, 0, -9),
 	}) do
-		for flowerIndex = 1, 3 do
-			local zOffset = if bedIndex == 3 then 0 else if flowerIndex % 2 == 0 then 1.2 else -1.2
-			local color = if flowerIndex == 1
-				then Color3.fromRGB(248, 139, 165)
-				elseif flowerIndex == 2 then Color3.fromRGB(255, 213, 106)
-				else Color3.fromRGB(166, 145, 245)
-			buildFlowerClump(
-				map,
-				bedPosition + Vector3.new((flowerIndex - 2) * 3, 0, zOffset),
-				color,
-				0.52
-			)
+		local bed = C + offset
+		part(map, "PlazaFlowerBed", Vector3.new(9, 0.8, 4), bed + Vector3.new(0, 0.5, 0), Color3.fromRGB(90, 150, 80), Enum.Material.Grass)
+		for flower = 1, 3 do
+			local colors = { Color3.fromRGB(248, 139, 165), Color3.fromRGB(255, 213, 106), Color3.fromRGB(166, 145, 245) }
+			buildFlowerClump(map, bed + Vector3.new((flower - 2) * 2.8, 0.9, 0), colors[(flower + index) % 3 + 1], 0.55)
 		end
 	end
-	buildPlanter(map, plaza + Vector3.new(-24, 0.4, -12), Vector3.new(9, 2.4, 9), Color3.fromRGB(120, 80, 55))
-	buildPlanter(map, plaza + Vector3.new(24, 0.4, -12), Vector3.new(9, 2.4, 9), Color3.fromRGB(120, 80, 55))
-	buildBench(map, plaza + Vector3.new(-30, 0.6, 0), 0)
-	buildBench(map, plaza + Vector3.new(30, 0.6, 0), 180)
-	buildBench(map, plaza + Vector3.new(-10, 0.6, -20), 0)
-	buildBench(map, plaza + Vector3.new(10, 0.6, -20), 180)
-
-	for _, offset in ipairs({
-		Vector3.new(-36, 0, -22),
-		Vector3.new(36, 0, -22),
-		Vector3.new(-36, 0, 22),
-		Vector3.new(36, 0, 22),
-	}) do
-		buildLampPost(map, plaza + offset)
+	for _, dx in ipairs({ -34, 34 }) do
+		buildBench(map, C + Vector3.new(dx, 0.6, 12), 0)
+		buildBench(map, C + Vector3.new(dx, 0.6, -12), 180)
 	end
 
+	-- Carteles de zona, delante de las tiendas.
+	for i, zoneId in ipairs(ZoneConfig.Order) do
+		local zone = ZoneConfig[zoneId]
+		local pos = C + Vector3.new((i - 2) * 13, 0, -13)
+		part(map, "SignPost", Vector3.new(0.8, 5, 0.8), pos + Vector3.new(0, 2.5, 0), Color3.fromRGB(120, 85, 55), Enum.Material.Wood)
+		local board = part(map, "ZoneSign_" .. zoneId, Vector3.new(8, 3.4, 0.6), pos + Vector3.new(0, 5.5, 0), Color3.fromRGB(95, 160, 220))
+		local req = zone.unlockCash > 0 and ("🔒 $" .. zone.unlockCash .. " ganados") or "✅ Libre"
+		billboard(board, "Zona " .. zone.order .. "\n" .. zone.displayName .. "\n" .. req, UDim2.fromOffset(130, 34), Vector3.new(0, 0, 0), 32)
+	end
+
+	-- Spawn de la plaza (por defecto; cada jugador aparece en su jardín).
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "PlazaSpawn"
 	spawn.Anchored = true
 	spawn.Size = Vector3.new(10, 1, 10)
-	spawn.Position = Vector3.new(plaza.X, 0.5, -8)
+	spawn.Position = Vector3.new(C.X, 0.5, C.Z + 12)
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Color = Color3.fromRGB(255, 220, 120)
@@ -370,100 +348,63 @@ function MapBuilder.BuildWorld()
 	spawn.CanCollide = false
 	spawn.Parent = map
 
-	buildFountain(map, plaza + Vector3.new(12, 0, -6))
-	part(map, "MarketPath", Vector3.new(62, 0.18, 30), plaza + Vector3.new(0, 0.12, 34), Color3.fromRGB(203, 185, 153), Enum.Material.Cobblestone)
-	buildShop(map, plaza + Vector3.new(-20, 0, 37), "Seeds", "SEED FARMER", Color3.fromRGB(102, 171, 83), Color3.fromRGB(114, 166, 87))
-	buildShop(map, plaza + Vector3.new(0, 0, 37), "Gear", "GEAR FARMER", Color3.fromRGB(93, 147, 202), Color3.fromRGB(102, 130, 168))
-	buildShop(map, plaza + Vector3.new(20, 0, 37), "Pets", "EGG FARMER", Color3.fromRGB(165, 119, 205), Color3.fromRGB(151, 110, 176))
-
-	-- Carteles de zonas (desde ZoneConfig)
-	for i, zoneId in ipairs(ZoneConfig.Order) do
-		local zone = ZoneConfig[zoneId]
-		local pos = plaza + Vector3.new(-24 + (i - 1) * 24, 0, -30)
-		part(map, "SignPost", Vector3.new(0.8, 5, 0.8), pos + Vector3.new(0, 2.5, 0), Color3.fromRGB(120, 85, 55), Enum.Material.Wood)
-		local board = part(map, "ZoneSign_" .. zoneId, Vector3.new(10, 3.4, 0.6), pos + Vector3.new(0, 5.5, 0), Color3.fromRGB(95, 160, 220))
-		local req = zone.unlockCash > 0 and ("🔒 $" .. zone.unlockCash .. " ganados") or "✅ Libre"
-		billboard(board, "Zona " .. zone.order .. "\n" .. zone.displayName .. "\n" .. req, UDim2.fromOffset(130, 34), Vector3.new(0, 0, 0), 32)
+	-- Farolas a lo largo de la calle, entre puerta y puerta (no tapan accesos).
+	for column = 0, GardenConfig.GardensPerRow - 1 do
+		local x = column * GardenConfig.GardenSlotSpacing + 30
+		buildLampPost(map, Vector3.new(x, 0, southBackZ + 5))
+		buildLampPost(map, Vector3.new(x, 0, northFrontZ - 5))
 	end
 
-	-- A stepped rectangular pond matches the voxel-like village style.
-	part(map, "PondSand", Vector3.new(36, 0.35, 29), Vector3.new(-50, 0.18, -55), Color3.fromRGB(226, 204, 139), Enum.Material.Sand)
-	local water = part(map, "Pond", Vector3.new(30, 0.35, 23), Vector3.new(-50, 0.36, -55), Color3.fromRGB(80, 170, 240), Enum.Material.Glass)
+	-- Arcos de entrada en los dos extremos de la calle.
+	buildArch(map, Vector3.new(streetMinX, 0, C.Z), "🌱 STEAL A PLANT")
+	buildArch(map, Vector3.new(streetMaxX, 0, C.Z), "🌱 STEAL A PLANT")
+
+	-- Estanque al oeste, a la vista desde el arco.
+	part(map, "PondSand", Vector3.new(36, 0.35, 29), Vector3.new(streetMinX - 34, 0.18, C.Z), Color3.fromRGB(226, 204, 139), Enum.Material.Sand)
+	local water = part(map, "Pond", Vector3.new(30, 0.35, 23), Vector3.new(streetMinX - 34, 0.36, C.Z), Color3.fromRGB(80, 170, 240), Enum.Material.Glass)
 	water.Transparency = 0.25
-	part(map, "PondWaterStep", Vector3.new(18, 0.15, 11), Vector3.new(-50, 0.58, -55), Color3.fromRGB(123, 205, 255), Enum.Material.Glass).Transparency = 0.35
-	local groveTreeTypes = { "Oak", "Pine", "Cherry", "Birch" }
-	for index, offset in ipairs({
-		Vector3.new(-41, 0, -31),
-		Vector3.new(41, 0, -31),
-		Vector3.new(-41, 0, 31),
-		Vector3.new(41, 0, 31),
-	}) do
-		buildTree(map, Vector3.new(-50, 0, -55) + offset, 0.92, groveTreeTypes[index])
-	end
-	for index, offset in ipairs({
-		Vector3.new(-24, 0.14, -19),
-		Vector3.new(24, 0.14, -19),
-		Vector3.new(-24, 0.14, 19),
-		Vector3.new(24, 0.14, 19),
-		Vector3.new(-25, 0.14, 0),
-		Vector3.new(25, 0.14, 0),
-	}) do
-		local color = if index % 3 == 0
-			then Color3.fromRGB(246, 139, 173)
-			elseif index % 3 == 1 then Color3.fromRGB(255, 207, 97)
-			else Color3.fromRGB(166, 145, 242)
-		buildFlowerClump(map, Vector3.new(-50, 0, -55) + offset, color, 0.7)
+	part(map, "PondWaterStep", Vector3.new(18, 0.15, 11), Vector3.new(streetMinX - 34, 0.58, C.Z), Color3.fromRGB(123, 205, 255), Enum.Material.Glass).Transparency = 0.35
+
+	-- Árboles y arbustos en los pasillos de 6 studs entre jardines.
+	local gapColors = { Color3.fromRGB(242, 144, 181), Color3.fromRGB(255, 205, 103), Color3.fromRGB(164, 146, 242) }
+	for column = 0, GardenConfig.GardensPerRow - 2 do
+		local gapX = column * GardenConfig.GardenSlotSpacing + (GardenConfig.YardMaxX + GardenConfig.GardenSlotSpacing + GardenConfig.YardMinX) / 2
+		for rowIndex, rowZ in ipairs({ 0, GardenConfig.NorthRowZ }) do
+			buildTree(map, Vector3.new(gapX, 0, rowZ + 6), 0.62, if (column + rowIndex) % 2 == 0 then "Cherry" else "Oak")
+			buildTree(map, Vector3.new(gapX, 0, rowZ + 26), 0.62, if (column + rowIndex) % 2 == 0 then "Birch" else "Pine")
+			buildFlowerClump(map, Vector3.new(gapX, 0.14, rowZ + 16), gapColors[(column + rowIndex) % 3 + 1], 0.7)
+		end
 	end
 
-	-- Four square-canopy tree families frame the plaza without blocking gardens.
+	-- Bosque exterior y flores en los bordes del mapa.
 	local rng = Random.new(1337)
-	local treeTypes = { "Oak", "Pine", "Cherry", "Birch" }
-	local treeCount = 48 + maxPlayers * 3
-	for index = 1, treeCount do
-		local x: number
-		local z: number
-		if index % 4 == 0 then
-			if rng:NextInteger(0, 1) == 0 then
-				x = rng:NextNumber(-132, -106)
-			else
-				x = rng:NextNumber(lastGardenX + 45, lastGardenX + 125)
-			end
-			z = rng:NextNumber(45, 114)
-		else
-			x = rng:NextNumber(minX + 5, maxX - 5)
-			z = rng:NextNumber(-132, -39)
-		end
-		local awayFromPond = (Vector2.new(x, z) - Vector2.new(-50, -55)).Magnitude > 25
-		if awayFromPond then
-			buildTree(map, Vector3.new(x, 0, z), rng:NextNumber(0.82, 1.18), treeTypes[rng:NextInteger(1, #treeTypes)])
-		end
+	local avoidPond = { { cx = streetMinX - 34, cz = C.Z, r = 30 } }
+	scatterTrees(map, rng, 34, { minX = minX + 8, maxX = maxX - 8, minZ = -60, maxZ = -22 }, avoidPond)
+	scatterTrees(map, rng, 30, { minX = minX + 8, maxX = maxX - 8, minZ = GardenConfig.NorthRowZ + 48, maxZ = maxZ - 6 }, avoidPond)
+	scatterTrees(map, rng, 12, { minX = minX + 8, maxX = streetMinX - 10, minZ = -22, maxZ = GardenConfig.NorthRowZ + 44 }, avoidPond)
+	scatterTrees(map, rng, 12, { minX = streetMaxX + 14, maxX = maxX - 8, minZ = -22, maxZ = GardenConfig.NorthRowZ + 44 }, avoidPond)
+	for index = 0, 24 do
+		local x = streetMinX + index * 12
+		buildFlowerClump(map, Vector3.new(x, 0.14, -14), gapColors[index % 3 + 1], 0.7)
+		buildFlowerClump(map, Vector3.new(x, 0.14, GardenConfig.NorthRowZ + 44), gapColors[(index + 1) % 3 + 1], 0.7)
 	end
 
-	-- Flower islands and lanterns give the long garden road clear landmarks.
-	for index = 0, math.floor((maxX - minX) / 54) do
-		local x = minX + 18 + index * 54
-		if x <= maxX - 18 and math.abs(x - plaza.X) > 42 then
-			local flowerColor = if index % 3 == 0
-				then Color3.fromRGB(242, 144, 181)
-				elseif index % 3 == 1 then Color3.fromRGB(255, 205, 103)
-				else Color3.fromRGB(164, 146, 242)
-			buildFlowerClump(map, Vector3.new(x, 0.14, plaza.Z - 35), flowerColor, 0.72)
-		end
-	end
-	for x = minX + 72, maxX - 30, 120 do
-		if math.abs(x - plaza.X) > 60 then
-			buildLampPost(map, Vector3.new(x, 0, plaza.Z - 34))
-		end
-	end
-
-	-- Small flower borders make the plaza feel planted, not empty.
-	for index = 1, 14 do
-		local side = if index % 2 == 0 then -1 else 1
-		local x = plaza.X + (index - 7.5) * 8
-		if math.abs(x - plaza.X) > 42 then
-			local flowerColor = if index % 3 == 0 then Color3.fromRGB(242, 144, 181) else Color3.fromRGB(255, 205, 103)
-			buildFlowerClump(map, Vector3.new(x, 0.14, side * 24), flowerColor, 0.62)
-		end
+	-- Manchas de césped/tierra para romper la planitud (bajas en partes).
+	local patchRandom = Random.new(7481)
+	for _ = 1, 40 do
+		local x = patchRandom:NextNumber(minX + 10, maxX - 10)
+		local z = patchRandom:NextNumber(minZ + 10, -24)
+		local isSoil = patchRandom:NextInteger(1, 4) == 1
+		part(
+			map,
+			if isSoil then "ExposedSoilPatch" else "GrassPatch",
+			Vector3.new(patchRandom:NextInteger(12, 26), 0.06, patchRandom:NextInteger(10, 22)),
+			Vector3.new(x, 0.13, z),
+			if isSoil
+				then Color3.fromRGB(patchRandom:NextInteger(123, 151), patchRandom:NextInteger(84, 108), patchRandom:NextInteger(59, 76))
+				else Color3.fromRGB(patchRandom:NextInteger(91, 125), patchRandom:NextInteger(164, 195), patchRandom:NextInteger(82, 111)),
+			if isSoil then Enum.Material.Ground else Enum.Material.Grass
+		)
 	end
 end
 
@@ -475,15 +416,18 @@ function MapBuilder.DecorateGarden(player: Player, garden: Model): Part
 	decor.Parent = garden
 
 	local wood = Color3.fromRGB(165, 120, 75)
+	local entryZ = (garden:GetAttribute("EntryZ") :: number?) or -11
+	local outward = (garden:GetAttribute("Outward") :: number?) or -1
 
 	-- GardenService builds and expands the fenced planting yard.
 	buildPlanter(decor, origin + Vector3.new(4, 0, -3), Vector3.new(3, 1.4, 2.4), wood)
 	buildPlanter(decor, origin + Vector3.new(26, 0, -3), Vector3.new(3, 1.4, 2.4), wood)
 
-	-- Cartel con el nombre del dueño
-	local signPost = part(decor, "SignPost", Vector3.new(0.8, 6, 0.8), origin + Vector3.new(-9, 3, -9), wood, Enum.Material.Wood)
-	local board = part(decor, "OwnerSign", Vector3.new(11, 2.4, 0.6), origin + Vector3.new(-9, 6.5, -9), Color3.fromRGB(255, 240, 200))
-	billboard(board, "🌱 " .. player.DisplayName .. "'s Garden", UDim2.fromOffset(160, 34), Vector3.new(0, 0, 0), 30)
+	-- Cartel con el nombre del dueño, en el lado de la calle (visible desde la plaza).
+	local signZ = if outward > 0 then GardenConfig.YardBackZ + 3 else GardenConfig.YardFrontZ - 3
+	local signPost = part(decor, "SignPost", Vector3.new(0.8, 6, 0.8), origin + Vector3.new(-3, 3, signZ), wood, Enum.Material.Wood)
+	local board = part(decor, "OwnerSign", Vector3.new(11, 2.4, 0.6), origin + Vector3.new(-3, 6.5, signZ), Color3.fromRGB(255, 240, 200))
+	billboard(board, "🌱 " .. player.DisplayName .. "'s Garden", UDim2.fromOffset(160, 34), Vector3.new(0, 0, 0), 60)
 	signPost.Name = "SignPost"
 
 	-- Arbustos en las esquinas traseras
@@ -492,14 +436,14 @@ function MapBuilder.DecorateGarden(player: Player, garden: Model): Part
 		part(decor, "BlockyBushTop", Vector3.new(2.6, 1.6, 2.6), origin + offset + Vector3.new(0, 1.8, 0), Color3.fromRGB(84, 177, 82), Enum.Material.Grass)
 	end
 
-	-- Punto de reaparición propio del jardín
+	-- Punto de reaparición propio del jardín (lado calle)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "GardenSpawn"
 	spawn.Anchored = true
 	spawn.CanCollide = false
 	spawn.Transparency = 1
 	spawn.Size = Vector3.new(6, 1, 6)
-	spawn.Position = origin + Vector3.new(15, 0.5, -11)
+	spawn.Position = origin + Vector3.new(15, 0.5, entryZ)
 	spawn.Neutral = true
 	spawn.Duration = 0
 	spawn.Parent = garden
