@@ -45,8 +45,17 @@ confirmPlacement.Pressed:Connect(function()
 	end
 
 	local playerGui = player:FindFirstChildOfClass("PlayerGui")
-	if playerGui and #playerGui:GetGuiObjectsAtPosition(position.X, position.Y) > 0 then
-		return
+	if playerGui then
+		for _, object in ipairs(playerGui:GetGuiObjectsAtPosition(position.X, position.Y)) do
+			-- Los marcos invisibles de maquetación (contenedores) no deben
+			-- bloquear el toque sobre el mundo.
+			local isLayoutOnly = object.BackgroundTransparency >= 1 and not object.Active
+				and not object:IsA("GuiButton") and not object:IsA("TextLabel")
+				and not object:IsA("ImageLabel") and not object:IsA("TextBox")
+			if not isLayoutOnly then
+				return
+			end
+		end
 	end
 	InventoryController.ConfirmPlacement(position)
 end)

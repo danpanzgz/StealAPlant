@@ -324,8 +324,8 @@ function GardenService.GetYardPosition(player: Player, position: Vector3): Vecto
 	end
 
 	local localPosition = floor.CFrame:PointToObjectSpace(position)
-	if math.abs(localPosition.X) > floor.Size.X / 2 - 4.5
-		or math.abs(localPosition.Z) > floor.Size.Z / 2 - 4.5 then
+	if math.abs(localPosition.X) > floor.Size.X / 2 - GardenConfig.PlacementMargin
+		or math.abs(localPosition.Z) > floor.Size.Z / 2 - GardenConfig.PlacementMargin then
 		return nil
 	end
 	return floor.CFrame:PointToWorldSpace(Vector3.new(localPosition.X, floor.Size.Y / 2, localPosition.Z))

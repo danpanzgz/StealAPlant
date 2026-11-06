@@ -62,6 +62,8 @@ GardenConfig.YardFrontZ = -7
 GardenConfig.YardBackZ = 37
 GardenConfig.YardMinX = -7
 GardenConfig.YardMaxX = 37
+-- Margen (studs) al borde de la valla donde NO se pueden colocar flores.
+GardenConfig.PlacementMargin = 3
 -- Orden de columnas desde el centro hacia fuera: los primeros jugadores
 -- quedan cerca de la plaza. Los slots alternan fila (0 sur, 1 norte).
 GardenConfig.ColumnOrder = { 2, 3, 1, 4, 0, 5 }
