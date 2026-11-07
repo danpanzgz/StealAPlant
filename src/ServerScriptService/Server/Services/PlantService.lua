@@ -32,6 +32,7 @@ local QuestService = require(script.Parent.QuestService)
 local PlantService = {}
 
 local growthUpdatedEvent = Net.GetRemoteEvent("PlantGrowthUpdated")
+local plantedEvent = Net.GetRemoteEvent("PlantPlanted")
 local plantHarvestedEvent = Net.GetRemoteEvent("PlantHarvested")
 
 local weak = { __mode = "k" }
@@ -439,6 +440,11 @@ function PlantService.PlantSeed(player: Player, plotIndex: number | Vector3, pla
 	PlantService.RefreshPlot(player, plotIndex)
 	GardenService.EnsureAvailablePlot(player)
 	growthUpdatedEvent:FireClient(player, { plotIndex = plotIndex, plantId = plantId, stage = 1 })
+	plantedEvent:FireClient(player, {
+		plotIndex = plotIndex,
+		plantId = plantId,
+		position = plotPart.Position + Vector3.new(0, 0.6, 0),
+	})
 
 	return true
 end

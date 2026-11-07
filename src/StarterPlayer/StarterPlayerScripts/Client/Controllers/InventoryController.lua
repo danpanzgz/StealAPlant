@@ -16,6 +16,7 @@ local UI = require(script.Parent.Parent.UI)
 local ClientState = require(script.Parent.Parent.ClientState)
 local PlantController = require(script.Parent.PlantController)
 local FarmArt = require(script.Parent.Parent.Modules.FarmArt)
+local EffectsController = require(script.Parent.EffectsController)
 
 local InventoryController = {}
 local player = Players.LocalPlayer
@@ -742,7 +743,10 @@ local function addPetRows(order: number)
 				return
 			end
 			openButton.Active = false
-			local result = openPetEggFn:InvokeServer(rarityId)
+			-- Animación de incubación mientras el servidor decide la mascota.
+			local result = EffectsController.HatchEgg(rarityId, function()
+				return openPetEggFn:InvokeServer(rarityId)
+			end)
 			openButton.Active = true
 			if result and result.success then
 				hud.Push("¡Nueva mascota: " .. result.displayName .. "!", "good")

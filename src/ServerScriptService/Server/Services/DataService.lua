@@ -53,6 +53,7 @@ local function newDefaultProfile(): any
 		},
 		plots = {}, -- [plotIndex] = { plantId, plantedAt, mutation, size, weight }
 		placedPlants = {},
+		plantIndex = {}, -- [plantId] = true (plantas ya descubiertas)
 		equippedGear = {},
 		shopPurchases = {},
 		defenses = {}, -- [slotIndex] = { defenseId, placedAt }
@@ -167,6 +168,18 @@ local function fromSaveData(data: any): any
 	reconcile(data, newDefaultProfile())
 	data.inventory = normalizeInventory(data.inventory)
 	data.placedPlants = type(data.placedPlants) == "table" and data.placedPlants or {}
+	data.plantIndex = type(data.plantIndex) == "table" and data.plantIndex or {}
+	-- Migración: lo que ya tienes (inventario, colocadas, bancales) cuenta como descubierto.
+	for _, plant in ipairs(data.inventory.plants or {}) do
+		if type(plant) == "table" and type(plant.plantId) == "string" then
+			data.plantIndex[plant.plantId] = true
+		end
+	end
+	for _, plant in ipairs(data.placedPlants) do
+		if type(plant) == "table" and type(plant.plantId) == "string" then
+			data.plantIndex[plant.plantId] = true
+		end
+	end
 	data.incubatorUnlocked = data.incubatorUnlocked == true
 	data.equippedGear = type(data.equippedGear) == "table" and data.equippedGear or {}
 	data.shopPurchases = type(data.shopPurchases) == "table" and data.shopPurchases or {}
