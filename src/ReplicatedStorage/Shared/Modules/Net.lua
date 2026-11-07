@@ -55,6 +55,8 @@ Net.RemoteEventNames = {
 	"InventoryUpdated",         -- server -> client: inventario de semillas completo (autoritativo)
 	"ShopStockUpdated",         -- server -> client: restock compartido cada 5 minutos
 	"SlapAction",               -- client -> server: golpe cómico con palo, sin daño
+	"PlantPlanted",             -- server -> client: semilla plantada (animación de tierra)
+	"PlantDiscovered",          -- server -> client: primera vez que se consigue una planta (Índice)
 }
 
 Net.RemoteFunctionNames = {

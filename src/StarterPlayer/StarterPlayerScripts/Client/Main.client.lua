@@ -24,6 +24,9 @@ local LeaderboardController = require(Client.Controllers.LeaderboardController)
 local StoreController = require(Client.Controllers.StoreController)
 local PromptController = require(Client.Controllers.PromptController)
 local SlapController = require(Client.Controllers.SlapController)
+local IndexController = require(Client.Controllers.IndexController)
+local AudioController = require(Client.Controllers.AudioController)
+local EffectsController = require(Client.Controllers.EffectsController)
 
 local getSnapshotFn = Net.GetRemoteFunction("GetPlayerProfileSnapshot")
 
@@ -71,6 +74,9 @@ LeaderboardController.Init(HUDController)
 StoreController.Init(HUDController)
 PromptController.Init()
 SlapController.Init(HUDController)
+IndexController.Init(HUDController, snapshot)
+AudioController.Init(HUDController)
+EffectsController.Init(HUDController)
 
 onboarding()
 

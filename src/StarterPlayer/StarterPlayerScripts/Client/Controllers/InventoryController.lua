@@ -3,9 +3,12 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
+local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
 local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
@@ -13,6 +16,7 @@ local UI = require(script.Parent.Parent.UI)
 local ClientState = require(script.Parent.Parent.ClientState)
 local PlantController = require(script.Parent.PlantController)
 local FarmArt = require(script.Parent.Parent.Modules.FarmArt)
+local EffectsController = require(script.Parent.EffectsController)
 
 local InventoryController = {}
 local player = Players.LocalPlayer
@@ -160,6 +164,109 @@ local function setPlacementContextEnabled(enabled: boolean)
 	end
 end
 
+local PLACE_REASONS: { [string]: string } = {
+	invalid_garden_position = "Toca dentro de la zona verde de TU jardín.",
+	invalid_position = "Posición no válida, prueba otro punto.",
+	position_occupied = "Ahí ya hay una planta o un bancal. Elige un hueco libre.",
+	plant_capacity_reached = "Tu jardín no admite más flores colocadas (más espacio con Rebirth). Vende o recoge alguna.",
+	too_far_from_garden = "Acércate a tu jardín para colocarla.",
+	carrying_stolen_plant = "Primero lleva a tu jardín la planta robada.",
+	plant_not_owned = "Esa planta ya no está en tu inventario.",
+	no_profile = "Tus datos aún se están cargando, espera un momento.",
+}
+
+local placementZone: Part? = nil
+local placementGhost: Part? = nil
+local placementConn: RBXScriptConnection? = nil
+
+local function getYardFloor(): BasePart?
+	local gardens = workspace:FindFirstChild("Gardens")
+	local garden = gardens and gardens:FindFirstChild("Garden_" .. player.UserId)
+	local boundary = garden and garden:FindFirstChild("YardBoundary")
+	local floor = boundary and boundary:FindFirstChild("GardenFloor")
+	if floor and floor:IsA("BasePart") then
+		return floor
+	end
+	return nil
+end
+
+local function isInsideYard(floor: BasePart, position: Vector3): boolean
+	local localPosition = floor.CFrame:PointToObjectSpace(position)
+	return math.abs(localPosition.X) <= floor.Size.X / 2 - GardenConfig.PlacementMargin
+		and math.abs(localPosition.Z) <= floor.Size.Z / 2 - GardenConfig.PlacementMargin
+end
+
+local function stopPlacementPreview()
+	if placementConn then
+		placementConn:Disconnect()
+		placementConn = nil
+	end
+	if placementZone then
+		placementZone:Destroy()
+		placementZone = nil
+	end
+	if placementGhost then
+		placementGhost:Destroy()
+		placementGhost = nil
+	end
+end
+
+local function newPreviewPart(name: string, color: Color3, transparency: number): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.CastShadow = false
+	part.Material = Enum.Material.SmoothPlastic
+	part.Color = color
+	part.Transparency = transparency
+	return part
+end
+
+-- Zona verde sobre el suelo válido + marcador que sigue al cursor (ratón).
+local function startPlacementPreview()
+	stopPlacementPreview()
+	local floor = getYardFloor()
+	if not floor then
+		return
+	end
+	local margin = GardenConfig.PlacementMargin
+	local zone = newPreviewPart("PlacementZone", Color3.fromRGB(110, 230, 120), 0.7)
+	zone.Size = Vector3.new(floor.Size.X - margin * 2, 0.1, floor.Size.Z - margin * 2)
+	zone.CFrame = floor.CFrame * CFrame.new(0, 0, 0)
+	zone.Position = Vector3.new(zone.Position.X, 0.32, zone.Position.Z)
+	zone.Parent = workspace
+	placementZone = zone
+
+	local ghost = newPreviewPart("PlacementGhost", Color3.fromRGB(110, 230, 120), 0.35)
+	ghost.Size = Vector3.new(3, 0.3, 3)
+	ghost.Parent = workspace
+	placementGhost = ghost
+
+	placementConn = RunService.RenderStepped:Connect(function()
+		local camera = workspace.CurrentCamera
+		if not camera or not UserInputService.MouseEnabled then
+			ghost.Transparency = 1
+			return
+		end
+		local pointer = UserInputService:GetMouseLocation()
+		local ray = camera:ViewportPointToRay(pointer.X, pointer.Y)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = if player.Character then { player.Character } else {}
+		local hit = workspace:Raycast(ray.Origin, ray.Direction * 512, params)
+		if not hit then
+			ghost.Transparency = 1
+			return
+		end
+		ghost.Transparency = 0.35
+		ghost.Color = if isInsideYard(floor, hit.Position) then Color3.fromRGB(110, 230, 120) else Color3.fromRGB(235, 90, 80)
+		ghost.Position = Vector3.new(hit.Position.X, 0.45, hit.Position.Z)
+	end)
+end
+
 function InventoryController.ToggleBag()
 	if hud then
 		hud.TogglePanel("Bag")
@@ -172,6 +279,7 @@ function InventoryController.CancelPlacement()
 	end
 	pendingPlantPlacementUid = nil
 	setPlacementContextEnabled(false)
+	stopPlacementPreview()
 	PlantController.RestoreSlapTool()
 	hud.Push("Colocación cancelada", "warn")
 end
@@ -195,14 +303,23 @@ function InventoryController.ConfirmPlacement(screenPosition: Vector2)
 		return
 	end
 
+	local floor = getYardFloor()
+	if floor and not isInsideYard(floor, hit.Position) then
+		hud.Push(PLACE_REASONS.invalid_garden_position, "warn")
+		return
+	end
+
 	local result = placePlantFn:InvokeServer(pendingPlantPlacementUid, hit.Position)
 	if result and result.success then
 		pendingPlantPlacementUid = nil
 		setPlacementContextEnabled(false)
+		stopPlacementPreview()
 		PlantController.RestoreSlapTool()
 		hud.Push("Flor colocada en tu jardín", "good")
 	else
-		hud.Push("No se pudo colocar: " .. tostring(result and result.reason or "error"), "warn")
+		local reason = tostring(result and result.reason or "error")
+		-- La colocación sigue activa: el jugador puede probar otro punto.
+		hud.Push(PLACE_REASONS[reason] or ("No se pudo colocar: " .. reason), "warn")
 	end
 end
 
@@ -488,8 +605,9 @@ local function addPlantRows(order: number)
 				pendingPlantPlacementUid = plant.uid
 				PlantController.ClearSeedTools(false)
 				setPlacementContextEnabled(true)
+				startPlacementPreview()
 				hud.TogglePanel("Bag")
-				hud.Push("Toca el suelo de tu jardín para elegir dónde colocarla. Esc para cancelar.", "good")
+				hud.Push("Toca la zona verde de tu jardín para colocarla. Esc para cancelar.", "good")
 			end)
 
 			local sellButton = UI.Button(card, "Vender", Color3.fromRGB(174, 116, 50), UDim2.new(0, 58, 0, 28), UDim2.new(0, 142, 1, -34))
@@ -625,7 +743,10 @@ local function addPetRows(order: number)
 				return
 			end
 			openButton.Active = false
-			local result = openPetEggFn:InvokeServer(rarityId)
+			-- Animación de incubación mientras el servidor decide la mascota.
+			local result = EffectsController.HatchEgg(rarityId, function()
+				return openPetEggFn:InvokeServer(rarityId)
+			end)
 			openButton.Active = true
 			if result and result.success then
 				hud.Push("¡Nueva mascota: " .. result.displayName .. "!", "good")

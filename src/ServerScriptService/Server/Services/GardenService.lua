@@ -119,7 +119,8 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 		part.Parent = yard
 	end
 
-	rail(Vector3.new(44, 0.5, 0.5), Vector3.new(15, 2.2, backZ))
+	rail(Vector3.new(15, 0.5, 0.5), Vector3.new(0.5, 2.2, backZ))
+	rail(Vector3.new(15, 0.5, 0.5), Vector3.new(29.5, 2.2, backZ))
 	rail(Vector3.new(0.5, 0.5, depth), Vector3.new(-7, 2.2, centerZ))
 	rail(Vector3.new(0.5, 0.5, depth), Vector3.new(37, 2.2, centerZ))
 	rail(Vector3.new(15, 0.5, 0.5), Vector3.new(0.5, 2.2, frontZ))
@@ -137,6 +138,29 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 			post.Parent = yard
 		end
 	end
+	-- Pilares de entrada con farol en ambas puertas (delantera y trasera).
+	for _, z in ipairs({ frontZ, backZ }) do
+		for _, x in ipairs({ 8, 22 }) do
+			local pillar = Instance.new("Part")
+			pillar.Name = "GatePillar"
+			pillar.Anchored = true
+			pillar.Size = Vector3.new(1.2, 5, 1.2)
+			pillar.Position = origin + Vector3.new(x, 2.5, z)
+			pillar.Material = Enum.Material.Wood
+			pillar.Color = Color3.fromRGB(120, 85, 55)
+			pillar.Parent = yard
+			local lamp = Instance.new("Part")
+			lamp.Name = "GateLamp"
+			lamp.Anchored = true
+			lamp.CanCollide = false
+			lamp.Size = Vector3.new(1.1, 0.9, 1.1)
+			lamp.Position = origin + Vector3.new(x, 5.4, z)
+			lamp.Material = Enum.Material.Neon
+			lamp.Color = Color3.fromRGB(255, 226, 130)
+			lamp.Parent = yard
+		end
+	end
+
 	for z = frontZ, backZ, 8.5 do
 		for _, x in ipairs({ -7, 37 }) do
 			local post = Instance.new("Part")
@@ -179,6 +203,14 @@ local function ensurePlotsExist(player: Player, gardenModel: Model, targetPlotCo
 	rebuildGardenYard(gardenModel, gardenModel:GetPivot().Position, targetPlotCount)
 end
 
+-- Posición de mundo en la calle, frente a la puerta de entrada del jardín.
+-- `outwardExtra` aleja más hacia la calle (para expulsar ladrones).
+function GardenService.GetEntryPosition(garden: Model, height: number, outwardExtra: number?): Vector3
+	local entryZ = (garden:GetAttribute("EntryZ") :: number?) or -11
+	local outward = (garden:GetAttribute("Outward") :: number?) or -1
+	return garden:GetPivot().Position + Vector3.new(15, height, entryZ + outward * (outwardExtra or 0))
+end
+
 -- Construye o actualiza el jardín físico del jugador según su perfil.
 function GardenService.AssignGarden(player: Player)
 	local profile = DataService.GetProfile(player)
@@ -189,11 +221,16 @@ function GardenService.AssignGarden(player: Player)
 	local slot = takeSlot()
 	assignedSlots[player.UserId] = slot
 
-	local origin = Vector3.new(slot * GardenConfig.GardenSlotSpacing, 0, 0)
+	local layout = GardenConfig.GetSlotLayout(slot)
+	local origin = layout.origin
 
 	local gardenModel = Instance.new("Model")
 	gardenModel.Name = "Garden_" .. player.UserId
 	gardenModel:SetAttribute("OwnerUserId", player.UserId)
+	gardenModel:SetAttribute("Slot", slot)
+	gardenModel:SetAttribute("Row", layout.row)
+	gardenModel:SetAttribute("EntryZ", layout.entryZ)
+	gardenModel:SetAttribute("Outward", layout.outward)
 	gardenModel:PivotTo(CFrame.new(origin))
 	gardenModel.Parent = gardensFolder
 	gardenModelByUser[player.UserId] = gardenModel
@@ -287,8 +324,8 @@ function GardenService.GetYardPosition(player: Player, position: Vector3): Vecto
 	end
 
 	local localPosition = floor.CFrame:PointToObjectSpace(position)
-	if math.abs(localPosition.X) > floor.Size.X / 2 - 4.5
-		or math.abs(localPosition.Z) > floor.Size.Z / 2 - 4.5 then
+	if math.abs(localPosition.X) > floor.Size.X / 2 - GardenConfig.PlacementMargin
+		or math.abs(localPosition.Z) > floor.Size.Z / 2 - GardenConfig.PlacementMargin then
 		return nil
 	end
 	return floor.CFrame:PointToWorldSpace(Vector3.new(localPosition.X, floor.Size.Y / 2, localPosition.Z))

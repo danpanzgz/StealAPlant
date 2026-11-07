@@ -227,7 +227,7 @@ local function sendThiefHome(thief: Player)
 	end
 
 	confetti(root)
-	character:PivotTo(CFrame.new(garden:GetPivot().Position + Vector3.new(15, 4, -11)))
+	character:PivotTo(CFrame.new(GardenService.GetEntryPosition(garden, 4)))
 
 	local originalSpeed = humanoid.WalkSpeed
 	humanoid.WalkSpeed = math.max(6, originalSpeed * 0.4)
@@ -388,7 +388,7 @@ function StealService.Init()
 								if math.abs(localPosition.X) <= floor.Size.X / 2 + 3
 									and math.abs(localPosition.Z) <= floor.Size.Z / 2 + 3
 									and localPosition.Y >= -4 and localPosition.Y <= 32 then
-									character:PivotTo(CFrame.new(garden:GetPivot().Position + Vector3.new(15, 3, -14)))
+									character:PivotTo(CFrame.new(GardenService.GetEntryPosition(garden, 3, 3)))
 								end
 							end
 						end
@@ -403,7 +403,7 @@ function StealService.Init()
 			local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			local garden = thief and GardenService.GetGardenModel(thief)
 			if thief and root and garden then
-				local base = garden:GetPivot().Position + Vector3.new(15, 0, -11)
+				local base = GardenService.GetEntryPosition(garden, 0)
 				if (root.Position - base).Magnitude <= 13 then
 					local profile = DataService.GetProfile(thief)
 					if profile and InventoryService.AddPlant(thief, carry.item) then

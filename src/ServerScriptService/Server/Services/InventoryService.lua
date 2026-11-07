@@ -9,6 +9,38 @@ local DataService = require(script.Parent.DataService)
 
 local InventoryService = {}
 local inventoryEvent = Net.GetRemoteEvent("InventoryUpdated")
+local discoveredEvent = Net.GetRemoteEvent("PlantDiscovered")
+
+local function countDiscovered(profile: any): number
+	local count = 0
+	for plantId in pairs(profile.plantIndex or {}) do
+		if PlantConfig[plantId] then
+			count += 1
+		end
+	end
+	return count
+end
+
+local function totalPlants(): number
+	return #PlantConfig.GetCatalog()
+end
+
+-- Registra la planta en el Índice. Devuelve true si es la primera vez.
+local function registerDiscovery(player: Player, profile: any, plant: any): boolean
+	profile.plantIndex = profile.plantIndex or {}
+	if profile.plantIndex[plant.plantId] then
+		return false
+	end
+	profile.plantIndex[plant.plantId] = true
+	discoveredEvent:FireClient(player, {
+		plantId = plant.plantId,
+		mutation = plant.mutation,
+		size = plant.size,
+		discovered = countDiscovered(profile),
+		total = totalPlants(),
+	})
+	return true
+end
 
 local function ensureInventory(profile: any)
 	profile.inventory.seeds = profile.inventory.seeds or {}
@@ -158,6 +190,7 @@ function InventoryService.AddPlant(player: Player, plant: any): boolean
 	end
 	ensureInventory(profile)
 	table.insert(profile.inventory.plants, plant)
+	registerDiscovery(player, profile, plant)
 	DataService.MarkDirty(player)
 	InventoryService.Push(player)
 	return true

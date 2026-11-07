@@ -327,6 +327,7 @@ function RemoteHandlers.Init()
 			gardenLevel = profile.gardenLevel,
 			inventory = profile.inventory,
 			placedPlants = profile.placedPlants,
+			plantIndex = profile.plantIndex or {},
 			incubatorUnlocked = profile.incubatorUnlocked == true,
 			gardenShieldUntil = player:GetAttribute("GardenShieldUntil") or 0,
 			equippedGear = profile.equippedGear,

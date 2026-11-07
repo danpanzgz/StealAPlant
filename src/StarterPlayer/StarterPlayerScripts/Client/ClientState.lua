@@ -22,6 +22,7 @@ ClientState.Defenses = {} :: { any }
 ClientState.Passes = {} :: { [string]: boolean }
 ClientState.PlacedPlants = {} :: { any }
 ClientState.EquippedGear = {} :: { [string]: boolean }
+ClientState.PlantIndex = {} :: { [string]: boolean }
 
 function ClientState.SetInventoryFromSnapshot(inventory: any)
 	ClientState.Inventory = inventory or { seeds = {}, plants = {}, gear = {}, pets = {}, petEggs = {}, seedPacks = {} }
