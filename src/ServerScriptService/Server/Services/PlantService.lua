@@ -209,7 +209,7 @@ local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: numbe
 	local model = Instance.new("Model")
 	model.Name = "PlantVisual"
 
-	local sizeMultiplier = (PlantInstanceConfig.Sizes[sizeId or "Normal"] or PlantInstanceConfig.Sizes.Normal).multiplier
+	local sizeMultiplier = (PlantInstanceConfig.Sizes[sizeId or "Normal"] or PlantInstanceConfig.Sizes.Normal).visualScale
 	local fruitColor = if mutation then MutationConfig[mutation].color else plantData.color
 	local position = plotPart.Position
 
@@ -339,8 +339,9 @@ local function refreshPlot(player: Player, plotIndex: number, plotPart: BasePart
 	local secondsLeft = math.max(0, math.ceil(plantData.growTimeSeconds * (1 - progress)))
 	local label = labelsByPlot[plotPart]
 	if label then
-		local mutationText = plotData.mutation and (" ✨" .. plotData.mutation) or ""
-		label.Text = if ready then ("✔ " .. plantData.displayName .. mutationText) else (secondsLeft .. "s")
+		label.Text = if ready
+			then ("✔ " .. PlantInstanceConfig.FormatName(plantData.displayName, plotData.size, plotData.mutation, plotData.weight))
+			else (secondsLeft .. "s")
 		label.TextColor3 = if ready then Color3.fromRGB(150, 255, 150) else Color3.fromRGB(255, 255, 255)
 	end
 
@@ -550,7 +551,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	local mutationData = plant.mutation and MutationConfig[plant.mutation] or nil
 	local bloomColor = mutationData and mutationData.color or plantData.color
 	local sizeData = PlantInstanceConfig.Sizes[plant.size] or PlantInstanceConfig.Sizes.Normal
-	local scale = math.clamp(sizeData.multiplier, 0.8, 2.5)
+	local scale = sizeData.visualScale
 	local origin = garden:GetPivot().Position
 	local savedPosition = plant.position
 	local position = if type(savedPosition) == "table" and type(savedPosition.x) == "number" and type(savedPosition.z) == "number"
@@ -625,7 +626,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
-	label.Text = string.format("%s · %s · $%d/min", plantData.displayName, plant.size, plant.incomePerMinute or 0)
+	label.Text = PlantInstanceConfig.FormatName(plantData.displayName, plant.size, plant.mutation, plant.weight) .. string.format(" · $%d/min", plant.incomePerMinute or 0)
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.TextStrokeTransparency = 0.35
 	label.TextScaled = true

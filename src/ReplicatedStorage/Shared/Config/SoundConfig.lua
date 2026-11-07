@@ -7,8 +7,9 @@
 
 	IMPORTANTE: usa solo audios que tú hayas subido a Roblox o que sean
 	públicos y de uso permitido; Roblox restringe los audios de terceros.
-	Los dos `rbxasset://sounds/...` de abajo son archivos internos del cliente
-	de Roblox usados como marcador; cámbialos cuando tengas los tuyos.
+	Los `rbxasset://sounds/...` de abajo son archivos internos del cliente de
+	Roblox usados como sonidos provisionales (suenan "a máquina"); cámbialos por
+	los tuyos cuando los tengas. Si alguno no existe en tu versión, no suena.
 ]]
 
 export type SfxDef = { id: string, volume: number, speed: number? }
@@ -21,16 +22,16 @@ SoundConfig.SfxVolume = 0.8
 
 -- Efectos de sonido por nombre. Los usan AudioController / EffectsController.
 SoundConfig.Sfx = {
-	Plant = { id = "rbxasset://sounds/snap.mp3", volume = 0.6, speed = 0.9 }, -- plantar semilla
-	Harvest = { id = "", volume = 0.7 }, -- cosechar
-	Discovery = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.8, speed = 0.9 }, -- planta nueva en el Índice
-	EggDrop = { id = "", volume = 0.7 }, -- el huevo aparece
-	EggShake = { id = "", volume = 0.6 }, -- el huevo se agita (se repite 4 veces)
-	EggCrack = { id = "", volume = 0.8 }, -- grieta
-	EggHatch = { id = "", volume = 0.9 }, -- se abre el huevo
+	Plant = { id = "rbxasset://sounds/snap.mp3", volume = 0.7, speed = 0.8 }, -- plantar semilla
+	Harvest = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.7, speed = 1.3 }, -- cosechar
+	Discovery = { id = "rbxasset://sounds/victory.wav", volume = 0.8 }, -- planta nueva en el Índice
+	EggDrop = { id = "rbxasset://sounds/action_jump_land.mp3", volume = 0.8 }, -- el huevo cae
+	EggShake = { id = "rbxasset://sounds/clickfast.wav", volume = 0.7, speed = 0.8 }, -- se agita (x4)
+	EggCrack = { id = "rbxasset://sounds/snap.mp3", volume = 0.9, speed = 0.55 }, -- grieta
+	EggHatch = { id = "rbxasset://sounds/victory.wav", volume = 0.9, speed = 1.2 }, -- se abre
 	Alarm = { id = "", volume = 0.7 }, -- alarma del jardín
 	StealResolved = { id = "", volume = 0.7 },
-	DailyReward = { id = "", volume = 0.8 },
+	DailyReward = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.8 },
 } :: { [string]: SfxDef }
 
 -- Canciones de fondo (se reproducen en bucle, en orden aleatorio).
@@ -41,7 +42,7 @@ SoundConfig.Music = {
 
 -- Voz de cada mascota al salir del huevo. Si no hay id propio se usa
 -- `DefaultCry` con un tono distinto por mascota para que no suenen iguales.
-SoundConfig.DefaultCry = { id = "", volume = 0.9 } :: SfxDef
+SoundConfig.DefaultCry = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.9 } :: SfxDef
 SoundConfig.PetCries = {
 	-- MeadowCube = { id = "rbxassetid://...", volume = 0.9 },
 	-- PondDuck = { id = "rbxassetid://...", volume = 0.9 },

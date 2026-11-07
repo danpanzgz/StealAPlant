@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
 local MonetizationConfig = require(ReplicatedStorage.Shared.Config.MonetizationConfig)
+local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
@@ -65,25 +66,38 @@ function MonetizationService.GetOwned(player: Player): { [string]: boolean }
 	return owned[player.UserId] or {}
 end
 
-function MonetizationService.GetCashMultiplier(player: Player): number
-	if MonetizationService.GetOwned(player).DoubleCash then
-		return MonetizationConfig.GamePasses.DoubleCash.cashMultiplier
+-- Bonus de la mascota equipada (según rareza). Siempre decidido en servidor.
+local function getPetBonus(player: Player, kind: "cash" | "growth" | "luck"): number
+	local profile = DataService.GetProfile(player)
+	local equipped = profile and profile.inventory and profile.inventory.equippedPet
+	if type(equipped) ~= "string" then
+		return 0
 	end
-	return 1
+	return PetConfig.GetBonuses(equipped)[kind]
+end
+
+function MonetizationService.GetCashMultiplier(player: Player): number
+	local multiplier = 1 + getPetBonus(player, "cash")
+	if MonetizationService.GetOwned(player).DoubleCash then
+		multiplier *= MonetizationConfig.GamePasses.DoubleCash.cashMultiplier
+	end
+	return multiplier
 end
 
 function MonetizationService.GetMutationMultiplier(player: Player): number
+	local multiplier = 1 + getPetBonus(player, "luck")
 	if MonetizationService.GetOwned(player).LuckyMutation then
-		return MonetizationConfig.GamePasses.LuckyMutation.mutationMultiplier
+		multiplier *= MonetizationConfig.GamePasses.LuckyMutation.mutationMultiplier
 	end
-	return 1
+	return multiplier
 end
 
 function MonetizationService.GetGrowthMultiplier(player: Player): number
+	local multiplier = 1 + getPetBonus(player, "growth")
 	if MonetizationService.GetOwned(player).GreenThumb then
-		return MonetizationConfig.GamePasses.GreenThumb.growthMultiplier
+		multiplier *= MonetizationConfig.GamePasses.GreenThumb.growthMultiplier
 	end
-	return 1
+	return multiplier
 end
 
 function MonetizationService.GetOfflineEarningsMinutes(player: Player): number

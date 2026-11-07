@@ -76,4 +76,44 @@ for rarity, entries in pairs(definitions) do
 	PetConfig.PetsByRarity[rarity] = rarityPets
 end
 
+-- Bonus de la mascota EQUIPADA según su rareza (fracciones: 0.25 = +25%).
+--   cash   : ingresos por minuto, ventas y ganancias offline
+--   growth : velocidad de crecimiento de lo que plantes
+--   luck   : probabilidad de mutación
+PetConfig.Bonuses = {
+	Common = { cash = 0.05, growth = 0, luck = 0 },
+	Uncommon = { cash = 0.10, growth = 0.05, luck = 0 },
+	Rare = { cash = 0.15, growth = 0.10, luck = 0.10 },
+	Epic = { cash = 0.25, growth = 0.15, luck = 0.20 },
+	Legendary = { cash = 0.40, growth = 0.25, luck = 0.35 },
+	Mythic = { cash = 0.60, growth = 0.40, luck = 0.60 },
+	Celestial = { cash = 1.00, growth = 0.60, luck = 1.00 },
+} :: { [string]: { cash: number, growth: number, luck: number } }
+
+local ZERO_BONUS = { cash = 0, growth = 0, luck = 0 }
+
+function PetConfig.GetBonuses(petId: string?): { cash: number, growth: number, luck: number }
+	local pet = if petId then PetConfig.Pets[petId] else nil
+	if not pet then
+		return ZERO_BONUS
+	end
+	return PetConfig.Bonuses[pet.rarity] or ZERO_BONUS
+end
+
+-- Texto corto para la interfaz: "+25% Cash · +15% Crecimiento · +20% Suerte".
+function PetConfig.Describe(petId: string?): string
+	local bonuses = PetConfig.GetBonuses(petId)
+	local parts = {}
+	if bonuses.cash > 0 then
+		table.insert(parts, string.format("+%d%% Cash", math.floor(bonuses.cash * 100 + 0.5)))
+	end
+	if bonuses.growth > 0 then
+		table.insert(parts, string.format("+%d%% Crecimiento", math.floor(bonuses.growth * 100 + 0.5)))
+	end
+	if bonuses.luck > 0 then
+		table.insert(parts, string.format("+%d%% Suerte", math.floor(bonuses.luck * 100 + 0.5)))
+	end
+	return table.concat(parts, " · ")
+end
+
 return PetConfig

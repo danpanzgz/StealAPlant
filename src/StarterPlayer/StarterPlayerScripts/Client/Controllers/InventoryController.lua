@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
 local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
+local PlantInstanceConfig = require(ReplicatedStorage.Shared.Config.PlantInstanceConfig)
 local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
@@ -585,14 +586,14 @@ local function addPlantRows(order: number)
 		if data then
 			order += 1
 			local rarity = RarityConfig[plant.rarity or data.rarity]
-			local mutation = plant.mutation and plant.mutation ~= false and (" · " .. tostring(plant.mutation)) or ""
 			local card = UI.Card(listFrame, 94, order)
 			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
 			cropIcon.Position = UDim2.fromOffset(8, 6)
-			UI.Label(card, data.displayName .. " · " .. (plant.size or "Normal") .. mutation, UDim2.new(1, -82, 0, 24), UDim2.new(0, 68, 0, 5), rarity.color)
+			local title = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutation, plant.weight), UDim2.new(1, -82, 0, 24), UDim2.new(0, 68, 0, 5), rarity.color)
+			title.TextTruncate = Enum.TextTruncate.AtEnd
 			UI.Label(
 				card,
-				string.format("%s · %.2f kg · Sell $%s · $%s/min", rarity.displayName, plant.weight or 0, UI.Money(plant.value or 0), UI.Money(plant.incomePerMinute or 0)),
+				string.format("%s · Sell $%s · $%s/min", rarity.displayName, UI.Money(plant.value or 0), UI.Money(plant.incomePerMinute or 0)),
 				UDim2.new(1, -82, 0, 18),
 				UDim2.new(0, 68, 0, 30),
 				UI.Colors.Muted,
@@ -637,7 +638,8 @@ local function addPlantRows(order: number)
 			local card = UI.Card(listFrame, 66, order)
 			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
 			cropIcon.Position = UDim2.fromOffset(8, 5)
-			UI.Label(card, "En jardín: " .. data.displayName .. " · " .. (plant.size or "Normal"), UDim2.new(1, -164, 0, 24), UDim2.new(0, 68, 0, 6), rarity.color)
+			local placedTitle = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutation, plant.weight), UDim2.new(1, -164, 0, 24), UDim2.new(0, 68, 0, 6), rarity.color)
+			placedTitle.TextTruncate = Enum.TextTruncate.AtEnd
 			UI.Label(card, "$" .. UI.Money(plant.incomePerMinute or 0) .. " por minuto", UDim2.new(1, -164, 0, 18), UDim2.new(0, 68, 0, 34), UI.Colors.Muted, false)
 			local collectButton = UI.Button(card, "Recoger", UI.Colors.Blue, UDim2.new(0, 72, 0, 34), UDim2.new(1, -82, 0.5, -17))
 			collectButton.Activated:Connect(function()
@@ -783,12 +785,12 @@ local function addPetRows(order: number)
 		UI.Label(card, pet and pet.displayName or tostring(petId), UDim2.new(1, -184, 0, 24), UDim2.new(0, 68, 0, 5), rarity and rarity.color or UI.Colors.Text)
 		UI.Label(
 			card,
-			rarity and (rarity.displayName .. " · compañero de granja") or "Mascota",
-			UDim2.new(1, -184, 0, 20),
-			UDim2.new(0, 68, 0, 33),
+			rarity and (rarity.displayName .. " · " .. PetConfig.Describe(petId)) or "Mascota",
+			UDim2.new(1, -184, 0, 28),
+			UDim2.new(0, 68, 0, 31),
 			UI.Colors.Muted,
 			false
-		)
+		).TextWrapped = true
 		local equipped = ClientState.Inventory.equippedPet == petId
 		local equipButton = UI.Button(
 			card,

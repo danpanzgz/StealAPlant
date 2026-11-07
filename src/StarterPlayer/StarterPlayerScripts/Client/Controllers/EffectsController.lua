@@ -344,6 +344,10 @@ function EffectsController.HatchEgg(rarityId: string, fetch: () -> any): any
 		local sub = UI.Label(overlay, (if rarity then rarity.displayName else rarityId) .. " · Nueva mascota", UDim2.fromOffset(320, 26), UDim2.new(0.5, -160, 0.46, 170), rarityColor)
 		sub.TextXAlignment = Enum.TextXAlignment.Center
 		sub.ZIndex = 30
+		local bonus = UI.Label(overlay, PetConfig.Describe(result.petId), UDim2.fromOffset(340, 24), UDim2.new(0.5, -170, 0.46, 198), Color3.fromRGB(150, 255, 150), false)
+		bonus.TextXAlignment = Enum.TextXAlignment.Center
+		bonus.TextWrapped = true
+		bonus.ZIndex = 30
 
 		task.wait(3.2)
 		tween(overlay, 0.3, { BackgroundTransparency = 1 })
