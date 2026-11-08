@@ -27,6 +27,7 @@ local SlapController = require(Client.Controllers.SlapController)
 local IndexController = require(Client.Controllers.IndexController)
 local AudioController = require(Client.Controllers.AudioController)
 local EffectsController = require(Client.Controllers.EffectsController)
+local SkyController = require(Client.Controllers.SkyController)
 
 local getSnapshotFn = Net.GetRemoteFunction("GetPlayerProfileSnapshot")
 
@@ -74,6 +75,7 @@ local function safeInit(name: string, init: () -> ())
 end
 
 HUDController.Init(snapshot)
+safeInit("SkyController", function() SkyController.Init() end)
 safeInit("ShopController", function() ShopController.Init(snapshot, HUDController) end)
 safeInit("PlantController", function() PlantController.Init(HUDController) end)
 safeInit("InventoryController", function() InventoryController.Init(HUDController) end)

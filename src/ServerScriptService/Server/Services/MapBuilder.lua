@@ -109,8 +109,8 @@ local function buildLampPost(parent: Instance, position: Vector3)
 	lantern.Transparency = 0.08
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 224, 153)
-	light.Brightness = 0.6
-	light.Range = 14
+	light.Brightness = 1.1
+	light.Range = 18
 	light.Parent = lantern
 end
 
@@ -242,20 +242,63 @@ function MapBuilder.BuildWorld()
 	-- Distancias cómodas en móvil.
 	StarterPlayer.CharacterWalkSpeed = 20
 
-	-- Iluminación alegre
-	Lighting.ClockTime = 14
-	Lighting.Brightness = 2.4
-	Lighting.Ambient = Color3.fromRGB(145, 151, 158)
-	Lighting.OutdoorAmbient = Color3.fromRGB(175, 183, 166)
+	-- Atardecer de película: sol bajo, cielo naranja-rosa-violeta, brillo suave.
+	Lighting.ClockTime = 17.55
+	Lighting.GeographicLatitude = 20
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = Color3.fromRGB(150, 118, 140)
+	Lighting.OutdoorAmbient = Color3.fromRGB(176, 136, 150)
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 176, 120)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(150, 110, 170)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
-	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
-	if not atmosphere then
-		atmosphere = Instance.new("Atmosphere")
-		atmosphere.Parent = Lighting
+	Lighting.FogColor = Color3.fromRGB(246, 168, 150)
+
+	local function ensure(className: string, name: string): Instance
+		local existing = Lighting:FindFirstChild(name)
+		if existing and existing.ClassName == className then
+			return existing
+		end
+		if existing then
+			existing:Destroy()
+		end
+		local created = Instance.new(className)
+		created.Name = name
+		created.Parent = Lighting
+		return created
 	end
-	atmosphere.Density = 0.1
-	atmosphere.Haze = 0.1
-	atmosphere.Color = Color3.fromRGB(214, 235, 255)
+
+	-- Sin sol/luna por defecto (los dibuja SkyController cuadrados). Estrellas suaves.
+	local sky = ensure("Sky", "SunsetSky") :: Sky
+	sky.SunAngularSize = 0
+	sky.MoonAngularSize = 0
+	sky.StarCount = 1500
+	sky.CelestialBodiesShown = true
+
+	local atmosphere = ensure("Atmosphere", "Atmosphere") :: Atmosphere
+	atmosphere.Density = 0.32
+	atmosphere.Offset = 0.3
+	atmosphere.Color = Color3.fromRGB(255, 190, 160)
+	atmosphere.Decay = Color3.fromRGB(190, 100, 150)
+	atmosphere.Glare = 0.7
+	atmosphere.Haze = 1.4
+
+	local bloom = ensure("BloomEffect", "SunsetBloom") :: BloomEffect
+	bloom.Intensity = 0.55
+	bloom.Size = 26
+	bloom.Threshold = 1.1
+
+	local rays = ensure("SunRaysEffect", "SunsetRays") :: SunRaysEffect
+	rays.Intensity = 0.1
+	rays.Spread = 0.8
+
+	local grade = ensure("ColorCorrectionEffect", "SunsetGrade") :: ColorCorrectionEffect
+	grade.Saturation = 0.16
+	grade.Contrast = 0.1
+	grade.Brightness = 0.02
+	grade.TintColor = Color3.fromRGB(255, 240, 228)
 
 	local map = Instance.new("Folder")
 	map.Name = "Map"
