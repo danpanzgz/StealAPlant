@@ -738,6 +738,26 @@ function HUDController.Init(snapshot: any)
 	screenGui.Parent = playerGui
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 
+	-- Etiqueta de versión (esquina inferior izquierda, discreta).
+	do
+		local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
+		local version = Instance.new("TextLabel")
+		version.Name = "VersionLabel"
+		version.BackgroundTransparency = 1
+		version.AnchorPoint = Vector2.new(0, 1)
+		version.Position = UDim2.new(0, 6, 1, -4)
+		version.Size = UDim2.fromOffset(220, 14)
+		version.Font = Enum.Font.Gotham
+		version.TextSize = 11
+		version.TextXAlignment = Enum.TextXAlignment.Left
+		version.TextColor3 = Color3.new(1, 1, 1)
+		version.TextTransparency = 0.35
+		version.TextStrokeTransparency = 0.7
+		version.Text = "Steal a Plant " .. tostring(GameConfig.Version)
+		version.Parent = screenGui
+		print("[Steal a Plant] cliente " .. tostring(GameConfig.Version))
+	end
+
 	createTopBar()
 	createNotificationLayer()
 	createEventBanner()

@@ -64,19 +64,28 @@ ClientState.Passes = snapshot.passes
 ClientState.PlacedPlants = snapshot.placedPlants or {}
 ClientState.EquippedGear = snapshot.equippedGear or {}
 
+-- Cada controlador se inicia aislado: si uno falla se avisa en Output y el
+-- resto del juego (incluidos audio y animaciones) sigue funcionando.
+local function safeInit(name: string, init: () -> ())
+	local ok, err = pcall(init)
+	if not ok then
+		warn(string.format("[Client] %s.Init falló: %s", name, tostring(err)))
+	end
+end
+
 HUDController.Init(snapshot)
-ShopController.Init(snapshot, HUDController)
-PlantController.Init(HUDController)
-InventoryController.Init(HUDController)
-GardenController.Init(HUDController)
-QuestController.Init(HUDController)
-LeaderboardController.Init(HUDController)
-StoreController.Init(HUDController)
-PromptController.Init()
-SlapController.Init(HUDController)
-IndexController.Init(HUDController, snapshot)
-AudioController.Init(HUDController)
-EffectsController.Init(HUDController)
+safeInit("ShopController", function() ShopController.Init(snapshot, HUDController) end)
+safeInit("PlantController", function() PlantController.Init(HUDController) end)
+safeInit("InventoryController", function() InventoryController.Init(HUDController) end)
+safeInit("GardenController", function() GardenController.Init(HUDController) end)
+safeInit("QuestController", function() QuestController.Init(HUDController) end)
+safeInit("LeaderboardController", function() LeaderboardController.Init(HUDController) end)
+safeInit("StoreController", function() StoreController.Init(HUDController) end)
+safeInit("PromptController", function() PromptController.Init() end)
+safeInit("SlapController", function() SlapController.Init(HUDController) end)
+safeInit("IndexController", function() IndexController.Init(HUDController, snapshot) end)
+safeInit("AudioController", function() AudioController.Init(HUDController) end)
+safeInit("EffectsController", function() EffectsController.Init(HUDController) end)
 
 onboarding()
 

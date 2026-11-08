@@ -18,6 +18,7 @@ local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
 local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local DefenseConfig: any = require(ReplicatedStorage.Shared.Config.DefenseConfig)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
+local MutationUtil = require(ReplicatedStorage.Shared.Modules.MutationUtil)
 
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
@@ -186,9 +187,7 @@ local function beginCarry(thief: Player, owner: Player, plantItem: any): boolean
 	bloom.CanCollide = false
 	bloom.Massless = true
 	bloom.Size = Vector3.new(1.2, 1.2, 1.2)
-	bloom.Color = plantItem.mutation == "Gold" and Color3.fromRGB(255, 207, 72)
-		or plantItem.mutation == "Diamond" and Color3.fromRGB(99, 222, 255)
-		or plantData.color
+	bloom.Color = MutationUtil.BlendColor(MutationUtil.List(plantItem.mutations, plantItem.mutation), plantData.color)
 	bloom.Material = if plantItem.mutation then Enum.Material.Neon else Enum.Material.SmoothPlastic
 	bloom.CFrame = root.CFrame * CFrame.new(0, 1.4, -1.8)
 	bloom.Parent = model

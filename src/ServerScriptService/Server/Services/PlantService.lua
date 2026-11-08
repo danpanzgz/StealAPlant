@@ -5,7 +5,7 @@
 	generar ingresos y venderlas. El servidor autoritativo conserva los datos.
 
 	Estado por plot, en profile.plots[plotIndex]:
-		{ plantId, plantedAt, mutation, size, weight }
+		{ plantId, plantedAt, mutation, mutations (lista), size, weight }
 ]]
 
 local Players = game:GetService("Players")
@@ -19,6 +19,8 @@ local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local PlantInstanceConfig = require(ReplicatedStorage.Shared.Config.PlantInstanceConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 local PlantModels = require(ReplicatedStorage.Shared.Modules.PlantModels)
+local MutationUtil = require(ReplicatedStorage.Shared.Modules.MutationUtil)
+local MutationVisuals = require(ReplicatedStorage.Shared.Modules.MutationVisuals)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
@@ -53,20 +55,26 @@ local floweringPlants = {
 
 -- ===== Utilidades =====
 
-local function rollMutation(player: Player): string | false
+-- Cada efecto se tira por separado: una planta puede tener varios (sin límite).
+-- Wet solo sale mientras llueve.
+local function rollMutations(player: Player): { string }
 	local luck = MonetizationService.GetMutationMultiplier(player)
 	local profile = DataService.GetProfile(player)
 	if profile and profile.equippedGear and profile.equippedGear.MutationTotem then
 		luck *= ShopConfig.Gear.MutationTotem.mutationLuck
 	end
+	local result: { string } = {}
 	for _, mutationId in ipairs(MutationConfig.Order) do
 		local data = MutationConfig[mutationId]
-		local chance = data.chance * EventService.GetMutationMultiplier(data.weatherTag) * luck
-		if math.random() < chance then
-			return mutationId
+		local allowed = data.weatherTag == nil or EventService.IsWeatherActive(data.weatherTag)
+		if allowed then
+			local chance = data.chance * EventService.GetMutationMultiplier(data.weatherTag) * luck
+			if math.random() < chance then
+				table.insert(result, mutationId)
+			end
 		end
 	end
-	return false
+	return MutationUtil.List(result, nil)
 end
 
 local function getPlotProgress(plotData: any, plantData: any): number
@@ -110,8 +118,8 @@ local function createPlantItem(plotData: any): any?
 		return nil
 	end
 	local rarity = RarityConfig[plantData.rarity]
-	local mutation = plotData.mutation
-	local mutationMultiplier = mutation and MutationConfig[mutation] and MutationConfig[mutation].valueMultiplier or 1
+	local mutationList = MutationUtil.List(plotData.mutations, plotData.mutation)
+	local mutationMultiplier = MutationUtil.Multiplier(mutationList)
 	local sizeId = plotData.size or "Normal"
 	local sizeData = PlantInstanceConfig.Sizes[sizeId] or PlantInstanceConfig.Sizes.Normal
 	local weight = tonumber(plotData.weight) or math.sqrt(plantData.baseSellValue) * 0.45
@@ -124,7 +132,8 @@ local function createPlantItem(plotData: any): any?
 		plantId = plantData.id,
 		weight = math.floor(weight * 100) / 100,
 		size = sizeId,
-		mutation = mutation or false,
+		mutation = MutationUtil.Primary(mutationList),
+		mutations = mutationList,
 		rarity = plantData.rarity,
 		value = value,
 		incomePerMinute = incomePerMinute,
@@ -203,14 +212,14 @@ local function addPollenEffect(adornee: BasePart, plantId: string, color: Color3
 	end
 end
 
-local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: number, stageCount: number, mutation: string | false, sizeId: string?)
+local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: number, stageCount: number, mutations: { string }, sizeId: string?)
 	clearPlantVisual(plotPart)
 
 	local model = Instance.new("Model")
 	model.Name = "PlantVisual"
 
-	local sizeMultiplier = (PlantInstanceConfig.Sizes[sizeId or "Normal"] or PlantInstanceConfig.Sizes.Normal).multiplier
-	local fruitColor = if mutation then MutationConfig[mutation].color else plantData.color
+	local sizeMultiplier = (PlantInstanceConfig.Sizes[sizeId or "Normal"] or PlantInstanceConfig.Sizes.Normal).visualScale
+	local fruitColor = MutationUtil.BlendColor(mutations, plantData.color)
 	local position = plotPart.Position
 
 	addCropBlock(model, "TilledSoil", position, Vector3.new(0, 0, 0), Vector3.new(7.5, 0.18, 7.5), Color3.fromRGB(112, 76, 48), 1)
@@ -222,7 +231,7 @@ local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: numbe
 	local progress = (stage - 1) / math.max(stageCount - 1, 1)
 	local stem, plantHeight = PlantModels.Build(model, plantId, position + Vector3.new(0, 0.67, 0), progress, {
 		fruitColor = fruitColor,
-		mutated = mutation ~= false,
+		mutated = #mutations > 0,
 		scale = sizeMultiplier,
 	})
 
@@ -230,45 +239,7 @@ local function buildPlantVisual(plotPart: BasePart, plantData: any, stage: numbe
 	if stage >= stageCount then
 		addPollenEffect(stem, plantId, plantData.color)
 	end
-	local mutationData = if mutation then MutationConfig[mutation] else nil
-	if mutationData then
-		local highlight = Instance.new("Highlight")
-		highlight.Name = mutation .. "Aura"
-		highlight.Adornee = model
-		highlight.FillColor = mutationData.color
-		highlight.FillTransparency = 0.84
-		highlight.OutlineColor = mutationData.color
-		highlight.OutlineTransparency = 0.08
-		highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-		highlight.Parent = model
-
-		local attachment = Instance.new("Attachment")
-		attachment.Name = mutation .. "SparklePoint"
-		attachment.Parent = stem
-		local sparkles = Instance.new("ParticleEmitter")
-		sparkles.Name = mutation .. "Sparkles"
-		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		sparkles.Color = ColorSequence.new(mutationData.color)
-		sparkles.Rate = if mutation == "Diamond" then 5 else 3
-		sparkles.Lifetime = NumberRange.new(0.8, 1.4)
-		sparkles.Speed = NumberRange.new(0.25, 0.7)
-		sparkles.SpreadAngle = Vector2.new(180, 180)
-		sparkles.Size = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.12),
-			NumberSequenceKeypoint.new(0.55, 0.22),
-			NumberSequenceKeypoint.new(1, 0),
-		})
-		sparkles.LightEmission = 0.7
-		sparkles.Parent = attachment
-
-		local glow = Instance.new("PointLight")
-		glow.Name = mutation .. "Glow"
-		glow.Color = mutationData.color
-		glow.Brightness = if mutation == "Diamond" then 0.9 else 0.45
-		glow.Range = if mutation == "Diamond" then 10 else 7
-		glow.Parent = stem
-
-	end
+	MutationVisuals.Apply(model, stem, mutations, plantHeight)
 
 	-- Indicador de progreso sobre la planta
 	local gui = Instance.new("BillboardGui")
@@ -328,9 +299,10 @@ local function refreshPlot(player: Player, plotIndex: number, plotPart: BasePart
 	local ready = progress >= 1
 
 	-- Solo reconstruimos la planta cuando cambia de fase (rendimiento).
-	local key = plantData.id .. ":" .. stage .. ":" .. tostring(plotData.mutation) .. ":" .. tostring(plotData.size)
+	local mutationList = MutationUtil.List(plotData.mutations, plotData.mutation)
+	local key = plantData.id .. ":" .. stage .. ":" .. table.concat(mutationList, "+") .. ":" .. tostring(plotData.size)
 	if visualKeyByPlot[plotPart] ~= key then
-		buildPlantVisual(plotPart, plantData, stage, plantData.stageCount, plotData.mutation, plotData.size)
+		buildPlantVisual(plotPart, plantData, stage, plantData.stageCount, mutationList, plotData.size)
 		visualKeyByPlot[plotPart] = key
 	end
 
@@ -339,14 +311,15 @@ local function refreshPlot(player: Player, plotIndex: number, plotPart: BasePart
 	local secondsLeft = math.max(0, math.ceil(plantData.growTimeSeconds * (1 - progress)))
 	local label = labelsByPlot[plotPart]
 	if label then
-		local mutationText = plotData.mutation and (" ✨" .. plotData.mutation) or ""
-		label.Text = if ready then ("✔ " .. plantData.displayName .. mutationText) else (secondsLeft .. "s")
+		label.Text = if ready
+			then ("✔ " .. PlantInstanceConfig.FormatName(plantData.displayName, plotData.size, mutationList, plotData.weight))
+			else (secondsLeft .. "s")
 		label.TextColor3 = if ready then Color3.fromRGB(150, 255, 150) else Color3.fromRGB(255, 255, 255)
 	end
 
 	if prompt then
 		if ready then
-			local text = plantData.displayName .. (plotData.mutation and (" (" .. plotData.mutation .. ")") or "")
+			local text = plantData.displayName .. (if #mutationList > 0 then (" (" .. MutationUtil.DisplayNames(mutationList) .. ")") else "")
 			updatePrompt(prompt, "Claim", text, true)
 		else
 			updatePrompt(prompt, "Growing...", plantData.displayName .. " (" .. secondsLeft .. "s)", false)
@@ -427,7 +400,7 @@ function PlantService.PlantSeed(player: Player, plotIndex: number | Vector3, pla
 	profile.plots[plotIndex] = {
 		plantId = plantId,
 		plantedAt = os.time(),
-		mutation = rollMutation(player),
+		mutations = rollMutations(player),
 		size = sizeId,
 		weight = baseWeight * sizeData.multiplier * (0.75 + math.random() * 0.5),
 		growthMultiplier = (if profile.equippedGear and profile.equippedGear.Sprinkler then ShopConfig.Gear.Sprinkler.growthMultiplier else 1)
@@ -496,7 +469,8 @@ function PlantService.HarvestPlant(player: Player, plotIndex: number): (boolean,
 	plantHarvestedEvent:FireClient(player, {
 		plotIndex = plotIndex,
 		plantId = plantData.id,
-		mutation = plotData.mutation,
+		mutation = plantItem.mutation,
+		mutations = plantItem.mutations,
 		plant = plantItem,
 	})
 
@@ -547,15 +521,15 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	if not garden then
 		return
 	end
-	local mutationData = plant.mutation and MutationConfig[plant.mutation] or nil
-	local bloomColor = mutationData and mutationData.color or plantData.color
+	local mutationList = MutationUtil.List(plant.mutations, plant.mutation)
+	local bloomColor = MutationUtil.BlendColor(mutationList, plantData.color)
 	local sizeData = PlantInstanceConfig.Sizes[plant.size] or PlantInstanceConfig.Sizes.Normal
-	local scale = math.clamp(sizeData.multiplier, 0.8, 2.5)
+	local scale = sizeData.visualScale
 	local origin = garden:GetPivot().Position
 	local savedPosition = plant.position
 	local position = if type(savedPosition) == "table" and type(savedPosition.x) == "number" and type(savedPosition.z) == "number"
-		then origin + Vector3.new(savedPosition.x, 0, savedPosition.z)
-		else origin + Vector3.new(-5, 0, (slot - 1) * 5 - 4)
+		then origin + Vector3.new(savedPosition.x, 0.22, savedPosition.z)
+		else origin + Vector3.new(-5, 0.22, (slot - 1) * 5 - 4)
 
 	local model = Instance.new("Model")
 	model.Name = "CollectionPlant_" .. plant.uid
@@ -565,7 +539,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 
 	local stem, plantHeight = PlantModels.Build(model, plant.plantId, position, 1, {
 		fruitColor = bloomColor,
-		mutated = mutationData ~= nil,
+		mutated = #mutationList > 0,
 		scale = scale * 0.75,
 	})
 
@@ -581,39 +555,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	bloom.Position = position + Vector3.new(0, math.max(plantHeight, 2) / 2, 0)
 	bloom.Parent = model
 	model.PrimaryPart = stem
-	if mutationData then
-		local highlight = Instance.new("Highlight")
-		highlight.Name = plant.mutation .. "Aura"
-		highlight.Adornee = model
-		highlight.FillColor = mutationData.color
-		highlight.FillTransparency = 0.84
-		highlight.OutlineColor = mutationData.color
-		highlight.OutlineTransparency = 0.08
-		highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-		highlight.Parent = model
-
-		local attachment = Instance.new("Attachment")
-		attachment.Name = plant.mutation .. "SparklePoint"
-		attachment.Parent = stem
-		local sparkles = Instance.new("ParticleEmitter")
-		sparkles.Name = plant.mutation .. "Sparkles"
-		sparkles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		sparkles.Color = ColorSequence.new(mutationData.color)
-		sparkles.Rate = if plant.mutation == "Diamond" then 5 else 3
-		sparkles.Lifetime = NumberRange.new(0.8, 1.4)
-		sparkles.Speed = NumberRange.new(0.25, 0.7)
-		sparkles.SpreadAngle = Vector2.new(180, 180)
-		sparkles.Size = NumberSequence.new(0.16)
-		sparkles.LightEmission = 0.7
-		sparkles.Parent = attachment
-
-		local glow = Instance.new("PointLight")
-		glow.Name = plant.mutation .. "Glow"
-		glow.Color = mutationData.color
-		glow.Brightness = if plant.mutation == "Diamond" then 0.9 else 0.45
-		glow.Range = if plant.mutation == "Diamond" then 10 else 7
-		glow.Parent = stem
-	end
+	MutationVisuals.Apply(model, stem, mutationList, plantHeight)
 	addPollenEffect(stem, plant.plantId, plantData.color)
 
 	local labelGui = Instance.new("BillboardGui")
@@ -625,7 +567,7 @@ local function buildCollectionPlantVisual(player: Player, plant: any, folder: Fo
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
-	label.Text = string.format("%s · %s · $%d/min", plantData.displayName, plant.size, plant.incomePerMinute or 0)
+	label.Text = PlantInstanceConfig.FormatName(plantData.displayName, plant.size, mutationList, plant.weight) .. string.format(" · $%d/min", plant.incomePerMinute or 0)
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.TextStrokeTransparency = 0.35
 	label.TextScaled = true
@@ -885,7 +827,13 @@ function PlantService.Init()
 			for _, player in ipairs(Players:GetPlayers()) do
 				local profile = DataService.GetProfile(player)
 				if profile then
-					for plotIndex in pairs(profile.plots) do
+					local eventGrowth = EventService.GetGrowthMultiplier()
+					for plotIndex, plotData in pairs(profile.plots) do
+						-- Evento (lluvia x1.2): tiempo extra mientras dura.
+						if eventGrowth > 1 and type(plotData) == "table" then
+							plotData.growthBonusSeconds = (plotData.growthBonusSeconds or 0)
+								+ GameConfig.GrowthTickInterval * (eventGrowth - 1) * (plotData.growthMultiplier or 1)
+						end
 						PlantService.RefreshPlot(player, plotIndex)
 					end
 				end

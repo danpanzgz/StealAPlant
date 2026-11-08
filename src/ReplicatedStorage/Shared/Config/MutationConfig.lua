@@ -78,6 +78,16 @@ MutationConfig.Diamond = {
 	chance = 0.005,
 	weatherTag = nil,
 }
-MutationConfig.Order = { "Diamond", "Gold" } :: any
+-- TODOS los efectos se tiran por separado: una planta puede conseguir varios
+-- a la vez (sin límite) y cada uno multiplica su precio. Wet solo aparece
+-- durante la lluvia (weatherTag "Rain").
+MutationConfig.Wet.chance = 0.06
+MutationConfig.Frozen.chance = 0.04
+MutationConfig.Frozen.weatherTag = nil
+MutationConfig.Shiny.chance = 0.06
+MutationConfig.Rainbow.chance = 0.012
+MutationConfig.Gold.chance = 0.035
+MutationConfig.Diamond.chance = 0.005
+MutationConfig.Order = { "Wet", "Frozen", "Shiny", "Gold", "Rainbow", "Diamond" } :: any
 
 return MutationConfig

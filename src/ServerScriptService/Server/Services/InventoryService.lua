@@ -35,6 +35,7 @@ local function registerDiscovery(player: Player, profile: any, plant: any): bool
 	discoveredEvent:FireClient(player, {
 		plantId = plant.plantId,
 		mutation = plant.mutation,
+		mutations = plant.mutations,
 		size = plant.size,
 		discovered = countDiscovered(profile),
 		total = totalPlants(),

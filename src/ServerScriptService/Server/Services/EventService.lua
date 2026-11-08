@@ -26,6 +26,7 @@ local function buildState(): any
 	return {
 		active = true,
 		id = current.id,
+		weatherTag = current.weatherTag,
 		displayName = current.displayName,
 		description = current.description,
 		secondsLeft = math.max(0, endsAt - os.time()),
@@ -43,6 +44,18 @@ end
 function EventService.GetMutationMultiplier(weatherTag: string?): number
 	if current and weatherTag and current.weatherTag == weatherTag then
 		return current.mutationChanceMultiplier
+	end
+	return 1
+end
+
+-- ¿Está activo un evento con este weatherTag? (Wet solo existe con lluvia.)
+function EventService.IsWeatherActive(weatherTag: string?): boolean
+	return current ~= nil and weatherTag ~= nil and current.weatherTag == weatherTag
+end
+
+function EventService.GetGrowthMultiplier(): number
+	if current then
+		return current.growthMultiplier or 1
 	end
 	return 1
 end

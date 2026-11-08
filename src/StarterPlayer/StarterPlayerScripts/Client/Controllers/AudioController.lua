@@ -7,6 +7,8 @@
 ]]
 
 local Debris = game:GetService("Debris")
+local ContentProvider = game:GetService("ContentProvider")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
@@ -161,9 +163,125 @@ local function applyMode()
 	end
 end
 
+-- ===== Ambiente en bucle =====
+local ambientSounds: { [string]: Sound } = {}
+
+local function setAmbient(name: string, on: boolean)
+	local existing = ambientSounds[name]
+	if not on then
+		if existing then
+			ambientSounds[name] = nil
+			local tween = TweenService:Create(existing, TweenInfo.new(1), { Volume = 0 })
+			tween:Play()
+			tween.Completed:Once(function()
+				existing:Destroy()
+			end)
+		end
+		return
+	end
+	if existing then
+		return
+	end
+	local def = SoundConfig.Ambient[name]
+	if not def then
+		return
+	end
+	local sound = createSound(def.id, 0, def.speed, sfxGroup)
+	if not sound then
+		return
+	end
+	sound.Name = "Ambient_" .. name
+	sound.Looped = true
+	sound.Parent = SoundService
+	sound:Play()
+	TweenService:Create(sound, TweenInfo.new(1.5), { Volume = def.volume }):Play()
+	ambientSounds[name] = sound
+end
+
+-- Avisa en consola de ids que no cargan (así sabes qué sonido falla).
+local function diagnose()
+	local list: { Instance } = {}
+	local function add(def: any)
+		if def and def.id ~= "" then
+			local sound = Instance.new("Sound")
+			sound.SoundId = def.id
+			table.insert(list, sound)
+		end
+	end
+	for _, def in pairs(SoundConfig.Sfx) do
+		add(def)
+	end
+	for _, def in pairs(SoundConfig.Ambient) do
+		add(def)
+	end
+	for _, def in ipairs(SoundConfig.Music) do
+		add(def)
+	end
+	local silent = 0
+	for _, def in pairs(SoundConfig.Sfx) do
+		if def.id == "" then
+			silent += 1
+		end
+	end
+	if #SoundConfig.Music == 0 then
+		print("[Audio] No hay música: añade ids en SoundConfig.Music.")
+	end
+	if silent > 0 then
+		print(string.format("[Audio] %d efectos sin id (silenciosos).", silent))
+	end
+	ContentProvider:PreloadAsync(list, function(assetId: string, status: Enum.AssetFetchStatus)
+		if status ~= Enum.AssetFetchStatus.Success then
+			warn("[Audio] No carga el sonido " .. assetId .. " (" .. tostring(status) .. "). Cambia el id en SoundConfig.")
+		end
+	end)
+	for _, sound in ipairs(list) do
+		sound:Destroy()
+	end
+end
+
+local function hookButton(button: GuiButton)
+	button.Activated:Connect(function()
+		local inBar = button:FindFirstAncestor("ActionBar") ~= nil
+		AudioController.Play(if inBar then "MenuOpen" else "Click")
+	end)
+end
+
 function AudioController.Init(hud: any)
 	sfxGroup = newGroup("SFX", SoundConfig.SfxVolume)
 	musicGroup = newGroup("Music", SoundConfig.MusicVolume)
+
+	-- Clic en TODOS los botones (también los que se crean después).
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	for _, object in ipairs(playerGui:GetDescendants()) do
+		if object:IsA("GuiButton") then
+			hookButton(object)
+		end
+	end
+	playerGui.DescendantAdded:Connect(function(object: Instance)
+		if object:IsA("GuiButton") then
+			hookButton(object)
+		end
+	end)
+
+	-- Eventos globales: aviso sonoro + ambiente propio mientras duran.
+	local lastEventId: string? = nil
+	Net.GetRemoteEvent("GlobalEventUpdated").OnClientEvent:Connect(function(state: any)
+		local newId = if type(state) == "table" and state.active then tostring(state.id) else nil
+		if newId ~= lastEventId then
+			if lastEventId then
+				setAmbient(lastEventId, false)
+			end
+			if newId then
+				AudioController.Play("EventStart")
+				setAmbient(newId, true)
+			elseif lastEventId then
+				AudioController.Play("EventEnd")
+			end
+			lastEventId = newId
+		end
+	end)
+	setAmbient("Garden", true)
+	task.spawn(diagnose)
 
 	-- Eventos del servidor que suenan sin animación propia.
 	Net.GetRemoteEvent("PlantHarvested").OnClientEvent:Connect(function()
