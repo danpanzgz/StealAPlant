@@ -275,16 +275,71 @@ function MapBuilder.BuildWorld()
 	part(map, "DirtFoundation", Vector3.new(widthX, 2, depthZ), Vector3.new((minX + maxX) / 2, -1, (minZ + maxZ) / 2), Color3.fromRGB(126, 91, 61), Enum.Material.Ground, true)
 	part(map, "GrassSurface", Vector3.new(widthX - 2, 0.16, depthZ - 2), Vector3.new((minX + maxX) / 2, 0.08, (minZ + maxZ) / 2), Color3.fromRGB(112, 190, 96), Enum.Material.Grass)
 
-	-- Muros invisibles: nadie se cae del mapa.
+	-- Muros invisibles gruesos y altos + suelo de seguridad bajo el mapa:
+	-- nadie sale del mapa ni cae al vacío (si algo falla, aterriza en la red).
 	local function wall(size: Vector3, position: Vector3)
 		local w = part(map, "BoundaryWall", size, position, Color3.new(1, 1, 1), nil, true)
 		w.Transparency = 1
 		w.CanQuery = false
+		w.CanTouch = false
 	end
-	wall(Vector3.new(widthX, 80, 2), Vector3.new((minX + maxX) / 2, 40, minZ))
-	wall(Vector3.new(widthX, 80, 2), Vector3.new((minX + maxX) / 2, 40, maxZ))
-	wall(Vector3.new(2, 80, depthZ), Vector3.new(minX, 40, (minZ + maxZ) / 2))
-	wall(Vector3.new(2, 80, depthZ), Vector3.new(maxX, 40, (minZ + maxZ) / 2))
+	local wallThickness, wallHeight = 6, 200
+	wall(Vector3.new(widthX + 2 * wallThickness, wallHeight, wallThickness), Vector3.new((minX + maxX) / 2, wallHeight / 2, minZ - wallThickness / 2 + 1))
+	wall(Vector3.new(widthX + 2 * wallThickness, wallHeight, wallThickness), Vector3.new((minX + maxX) / 2, wallHeight / 2, maxZ + wallThickness / 2 - 1))
+	wall(Vector3.new(wallThickness, wallHeight, depthZ + 2 * wallThickness), Vector3.new(minX - wallThickness / 2 + 1, wallHeight / 2, (minZ + maxZ) / 2))
+	wall(Vector3.new(wallThickness, wallHeight, depthZ + 2 * wallThickness), Vector3.new(maxX + wallThickness / 2 - 1, wallHeight / 2, (minZ + maxZ) / 2))
+	local net = part(map, "SafetyNet", Vector3.new(widthX + 400, 4, depthZ + 400), Vector3.new((minX + maxX) / 2, -30, (minZ + maxZ) / 2), Color3.new(1, 1, 1), nil, true)
+	net.Transparency = 1
+	net.CanQuery = false
+	workspace.FallenPartsDestroyHeight = -400
+
+	-- Seto perimetral pegado al muro: el borde del mundo se ve como un seto
+	-- cuidado con arbustos redondos, no como un precipicio.
+	local hedgeColor = Color3.fromRGB(58, 132, 64)
+	local inset = 4
+	local function hedge(size: Vector3, position: Vector3)
+		part(map, "BorderHedge", size, position, hedgeColor, Enum.Material.Grass, true)
+	end
+	hedge(Vector3.new(widthX - 2 * inset, 3.2, 3), Vector3.new((minX + maxX) / 2, 1.6, minZ + inset))
+	hedge(Vector3.new(widthX - 2 * inset, 3.2, 3), Vector3.new((minX + maxX) / 2, 1.6, maxZ - inset))
+	hedge(Vector3.new(3, 3.2, depthZ - 2 * inset), Vector3.new(minX + inset, 1.6, (minZ + maxZ) / 2))
+	hedge(Vector3.new(3, 3.2, depthZ - 2 * inset), Vector3.new(maxX - inset, 1.6, (minZ + maxZ) / 2))
+	local bushRandom = Random.new(2024)
+	local function bush(x: number, z: number)
+		local size = bushRandom:NextNumber(3.6, 5.2)
+		local ball = part(map, "BorderBush", Vector3.new(size, size, size), Vector3.new(x, size * 0.45, z), Color3.fromRGB(bushRandom:NextInteger(60, 90), bushRandom:NextInteger(150, 180), bushRandom:NextInteger(70, 95)), Enum.Material.Grass)
+		ball.Shape = Enum.PartType.Ball
+		ball.CanQuery = false
+	end
+	for x = minX + inset, maxX - inset, 16 do
+		bush(x, minZ + inset)
+		bush(x + 8, maxZ - inset)
+	end
+	for z = minZ + inset, maxZ - inset, 16 do
+		bush(minX + inset, z)
+		bush(maxX - inset, z + 8)
+	end
+
+	-- Paisaje exterior: colinas y montañas de fondo (decorativas, fuera del muro).
+	local sceneryRandom = Random.new(99)
+	local function hill(x: number, z: number, radius: number, height: number, color: Color3)
+		local ball = part(map, "FarHill", Vector3.new(radius * 2, height * 2, radius * 2), Vector3.new(x, 0, z), color, Enum.Material.Grass)
+		ball.Shape = Enum.PartType.Ball
+		ball.CanQuery = false
+		ball.CastShadow = false
+	end
+	for i = 0, 11 do
+		local x = minX - 40 + i * ((widthX + 80) / 11)
+		hill(x, minZ - 70 - sceneryRandom:NextNumber(0, 50), sceneryRandom:NextNumber(50, 85), sceneryRandom:NextNumber(24, 48), Color3.fromRGB(86, 150, 84))
+		hill(x, maxZ + 70 + sceneryRandom:NextNumber(0, 50), sceneryRandom:NextNumber(50, 85), sceneryRandom:NextNumber(24, 48), Color3.fromRGB(86, 150, 84))
+	end
+	for i = 0, 5 do
+		local z = minZ + i * (depthZ / 5)
+		hill(minX - 80 - sceneryRandom:NextNumber(0, 40), z, sceneryRandom:NextNumber(45, 75), sceneryRandom:NextNumber(22, 42), Color3.fromRGB(92, 156, 90))
+		hill(maxX + 80 + sceneryRandom:NextNumber(0, 40), z, sceneryRandom:NextNumber(45, 75), sceneryRandom:NextNumber(22, 42), Color3.fromRGB(92, 156, 90))
+	end
+	-- Suelo exterior verde para que nunca se vea el vacío tras los muros.
+	part(map, "OuterGround", Vector3.new(widthX + 900, 2, depthZ + 900), Vector3.new((minX + maxX) / 2, -1.05, (minZ + maxZ) / 2), Color3.fromRGB(100, 170, 90), Enum.Material.Grass, false)
 
 	-- Calle central empedrada con bordillos de piedra.
 	local roadWidth = GardenConfig.StreetWidth - 4
@@ -372,7 +427,8 @@ function MapBuilder.BuildWorld()
 		for rowIndex, rowZ in ipairs({ 0, GardenConfig.NorthRowZ }) do
 			buildTree(map, Vector3.new(gapX, 0, rowZ + 6), 0.62, if (column + rowIndex) % 2 == 0 then "Cherry" else "Oak")
 			buildTree(map, Vector3.new(gapX, 0, rowZ + 26), 0.62, if (column + rowIndex) % 2 == 0 then "Birch" else "Pine")
-			buildFlowerClump(map, Vector3.new(gapX, 0.14, rowZ + 16), gapColors[(column + rowIndex) % 3 + 1], 0.7)
+			buildFlowerClump(map, Vector3.new(gapX, 0.14, rowZ + 9.5), gapColors[(column + rowIndex) % 3 + 1], 0.7)
+			buildFlowerClump(map, Vector3.new(gapX, 0.14, rowZ + 22.5), gapColors[(column + rowIndex + 1) % 3 + 1], 0.7)
 		end
 	end
 
@@ -423,12 +479,7 @@ function MapBuilder.DecorateGarden(player: Player, garden: Model): Part
 	buildPlanter(decor, origin + Vector3.new(4, 0, -3), Vector3.new(3, 1.4, 2.4), wood)
 	buildPlanter(decor, origin + Vector3.new(26, 0, -3), Vector3.new(3, 1.4, 2.4), wood)
 
-	-- Cartel con el nombre del dueño, en el lado de la calle (visible desde la plaza).
-	local signZ = if outward > 0 then GardenConfig.YardBackZ + 3 else GardenConfig.YardFrontZ - 3
-	local signPost = part(decor, "SignPost", Vector3.new(0.8, 6, 0.8), origin + Vector3.new(-3, 3, signZ), wood, Enum.Material.Wood)
-	local board = part(decor, "OwnerSign", Vector3.new(11, 2.4, 0.6), origin + Vector3.new(-3, 6.5, signZ), Color3.fromRGB(255, 240, 200))
-	billboard(board, "🌱 " .. player.DisplayName .. "'s Garden", UDim2.fromOffset(160, 34), Vector3.new(0, 0, 0), 60)
-	signPost.Name = "SignPost"
+	-- El cartel "Jardín de <nombre>" vive sobre las puertas (GardenService).
 
 	-- Arbustos en las esquinas traseras
 	for _, offset in ipairs({ Vector3.new(-5, 1.5, 25), Vector3.new(35, 1.5, 25) }) do

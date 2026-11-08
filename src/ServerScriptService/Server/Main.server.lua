@@ -99,4 +99,24 @@ for _, player in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, player)
 end
 
+-- Red de seguridad: si alguien acaba bajo el mapa o fuera de los límites
+-- (lag, bug de física...), vuelve a la entrada de su jardín (o a la plaza).
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for _, player in ipairs(Players:GetPlayers()) do
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if root and (root.Position.Y < -6 or math.abs(root.Position.X - MapBuilder.PlazaCenter.X) > 600 or math.abs(root.Position.Z - MapBuilder.PlazaCenter.Z) > 600) then
+				local garden = GardenService.GetGardenModel(player)
+				local target = if garden
+					then GardenService.GetEntryPosition(garden, 4)
+					else Vector3.new(MapBuilder.PlazaCenter.X, 5, MapBuilder.PlazaCenter.Z + 12)
+				root.AssemblyLinearVelocity = Vector3.zero
+				local character = player.Character :: Model
+				character:PivotTo(CFrame.new(target))
+			end
+		end
+	end
+end)
+
 print("[Main] Steal a Plant server inicializado.")

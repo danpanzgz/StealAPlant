@@ -16,6 +16,7 @@ local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local InventoryService = require(script.Parent.InventoryService)
 local PlantService = require(script.Parent.PlantService)
+local GardenService = require(script.Parent.GardenService)
 local DefenseService = require(script.Parent.DefenseService)
 
 local RebirthService = {}
@@ -69,6 +70,7 @@ function RebirthService.TryRebirth(player: Player): (boolean, any)
 	profile.lastSeenAt = os.time()
 	InventoryService.Push(player)
 	PlantService.ResetPlots(player)
+	GardenService.RefreshFence(player) -- valla y cartel suben de estilo con cada Rebirth
 
 	local bonusCash = math.floor(lifetimeEarnings * GameConfig.RebirthCashBonus)
 	if bonusCash > 0 then
