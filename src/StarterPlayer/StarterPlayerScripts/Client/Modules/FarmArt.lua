@@ -86,9 +86,36 @@ function FarmArt.CreateGearIcon(parent: Instance, gearId: string, rarityColor: C
 	return art
 end
 
+local PET_RARITY_STYLE: { [string]: { order: number, color: Color3 } } = {
+	Common = { order = 1, color = Color3.fromRGB(190, 190, 190) },
+	Uncommon = { order = 2, color = Color3.fromRGB(110, 220, 120) },
+	Rare = { order = 3, color = Color3.fromRGB(90, 170, 255) },
+	Epic = { order = 4, color = Color3.fromRGB(190, 110, 255) },
+	Legendary = { order = 5, color = Color3.fromRGB(255, 200, 70) },
+	Mythic = { order = 6, color = Color3.fromRGB(255, 90, 140) },
+	Celestial = { order = 7, color = Color3.fromRGB(130, 245, 255) },
+}
+
 function FarmArt.CreatePetIcon(parent: Instance, petData: any, name: string?): Frame
 	local art = createArtFrame(parent, name or "PetArt", 52, 56)
 	local z = art.ZIndex
+	local style = PET_RARITY_STYLE[petData.rarity] or PET_RARITY_STYLE.Common
+	local ro = style.order
+	local rc = style.color
+	local gold = Color3.fromRGB(255, 214, 92)
+
+	-- Marco/resplandor de rareza detrás de la mascota.
+	if ro >= 3 then
+		local glow = pixel(art, "RarityGlow", UDim2.fromOffset(50, 54), UDim2.fromOffset(1, 1), rc, z - 1)
+		glow.BackgroundTransparency = if ro >= 6 then 0.65 else 0.8
+		if ro >= 5 then
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = rc
+			stroke.Thickness = if ro >= 7 then 2 else 1
+			stroke.Transparency = 0.2
+			stroke.Parent = glow
+		end
+	end
 	local bodyColor = petData.color
 	local accent = petData.accentColor
 	local feature = petData.feature
@@ -124,6 +151,49 @@ function FarmArt.CreatePetIcon(parent: Instance, petData: any, name: string?): F
 			pixel(art, "GillLeft", UDim2.fromOffset(5, 3), UDim2.fromOffset(4, 28 + index * 4), accent, z + 2)
 			pixel(art, "GillRight", UDim2.fromOffset(5, 3), UDim2.fromOffset(43, 28 + index * 4), accent, z + 2)
 		end
+	end
+
+	-- Detalles por rareza.
+	if ro >= 2 then
+		pixel(art, "LeftCheek", UDim2.fromOffset(4, 3), UDim2.fromOffset(12, 35), accent:Lerp(Color3.new(1, 1, 1), 0.4), z + 3)
+		pixel(art, "RightCheek", UDim2.fromOffset(4, 3), UDim2.fromOffset(36, 35), accent:Lerp(Color3.new(1, 1, 1), 0.4), z + 3)
+	end
+	if ro >= 3 then
+		local patch = bodyColor:Lerp(accent, 0.45)
+		pixel(art, "PatchA", UDim2.fromOffset(8, 5), UDim2.fromOffset(12, 19), patch, z + 2)
+		pixel(art, "PatchB", UDim2.fromOffset(6, 5), UDim2.fromOffset(32, 19), patch, z + 2)
+		pixel(art, "LeftShine", UDim2.fromOffset(2, 2), UDim2.fromOffset(17, 26), Color3.new(1, 1, 1), z + 4)
+		pixel(art, "RightShine", UDim2.fromOffset(2, 2), UDim2.fromOffset(30, 26), Color3.new(1, 1, 1), z + 4)
+	end
+	if ro >= 4 then
+		pixel(art, "NeonGemL", UDim2.fromOffset(4, 7), UDim2.fromOffset(2, 12), rc, z + 4)
+		pixel(art, "NeonGemR", UDim2.fromOffset(4, 7), UDim2.fromOffset(46, 12), rc, z + 4)
+		pixel(art, "TailGlow", UDim2.fromOffset(8, 3), UDim2.fromOffset(22, 53), rc, z + 4)
+	end
+	if ro >= 5 then
+		pixel(art, "HaloTop", UDim2.fromOffset(22, 2), UDim2.fromOffset(15, 0), gold, z + 5)
+		pixel(art, "HaloL", UDim2.fromOffset(2, 4), UDim2.fromOffset(13, 1), gold, z + 5)
+		pixel(art, "HaloR", UDim2.fromOffset(2, 4), UDim2.fromOffset(37, 1), gold, z + 5)
+	end
+	if ro >= 6 then
+		pixel(art, "OrbA", UDim2.fromOffset(4, 4), UDim2.fromOffset(0, 8), rc, z + 5)
+		pixel(art, "OrbB", UDim2.fromOffset(4, 4), UDim2.fromOffset(48, 30), accent, z + 5)
+		pixel(art, "OrbC", UDim2.fromOffset(4, 4), UDim2.fromOffset(0, 44), rc, z + 5)
+	end
+	if ro >= 7 then
+		local outer = pixel(art, "HaloOuter", UDim2.fromOffset(30, 2), UDim2.fromOffset(11, 3), rc, z + 5)
+		outer.BackgroundTransparency = 0.2
+		local wl = pixel(art, "LightWingL", UDim2.fromOffset(5, 22), UDim2.fromOffset(0, 24), Color3.new(1, 1, 1), z)
+		wl.BackgroundTransparency = 0.45
+		local wr = pixel(art, "LightWingR", UDim2.fromOffset(5, 22), UDim2.fromOffset(47, 24), Color3.new(1, 1, 1), z)
+		wr.BackgroundTransparency = 0.45
+	end
+
+	-- Estrellas de rareza (1-5): Common 1 ... Celestial 5.
+	local stars = math.clamp(ro - 1, 1, 5)
+	for index = 1, stars do
+		local x = 26 - stars * 3 + (index - 1) * 6
+		pixel(art, "Star", UDim2.fromOffset(3, 3), UDim2.fromOffset(x, 53), if ro >= 5 then gold else rc, z + 6)
 	end
 
 	return art

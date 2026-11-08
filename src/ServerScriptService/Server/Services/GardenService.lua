@@ -103,7 +103,7 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 	floor.Name = "GardenFloor"
 	floor.Anchored = true
 	floor.Size = Vector3.new(44, 0.4, depth)
-	floor.Position = origin + Vector3.new(15, -0.25, centerZ)
+	floor.Position = origin + Vector3.new(15, 0.02, centerZ) -- cara superior en y=0.22, por encima del césped (0.16)
 	floor.Material = Enum.Material.Ground
 	floor.Color = Color3.fromRGB(120, 85, 55)
 	floor.Parent = yard

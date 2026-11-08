@@ -7,7 +7,7 @@
 	  label       : prefijo en nombres ("" = Normal, no se muestra nada).
 ]]
 
-local MutationConfig = require(script.Parent.MutationConfig)
+local MutationUtil = require(script.Parent.Parent.Modules.MutationUtil)
 
 local PlantInstanceConfig = {}
 
@@ -18,20 +18,21 @@ PlantInstanceConfig.Sizes = {
 }
 PlantInstanceConfig.SizeOrder = { "Normal", "Large", "Giant" }
 PlantInstanceConfig.MutationOrder = { "Diamond", "Gold" }
-PlantInstanceConfig.PlaceCapacityBase = 2
+PlantInstanceConfig.PlaceCapacityBase = 6
 PlantInstanceConfig.PlaceCapacityPerRebirth = 2
 
 -- Nombre mostrado en inventario y etiquetas:
---   [Big|Giant] Nombre [· Mutación] [· 1.23 kg]      (Normal no lleva prefijo)
+--   [Big|Giant] Nombre [· Efecto · Efecto...] [· 1.23 kg]      (Normal no lleva prefijo)
 function PlantInstanceConfig.FormatName(displayName: string, sizeId: string?, mutationId: any, weightKg: number?): string
 	local size = PlantInstanceConfig.Sizes[sizeId or "Normal"]
 	local text = displayName
 	if size and size.label ~= "" then
 		text = size.label .. " " .. text
 	end
-	if type(mutationId) == "string" and mutationId ~= "" then
-		local mutation = (MutationConfig :: any)[mutationId]
-		text ..= " · " .. (if mutation then mutation.displayName else mutationId)
+	-- `mutationId` puede ser un id suelto o la lista completa de efectos.
+	local list = MutationUtil.List(if type(mutationId) == "table" then mutationId else nil, if type(mutationId) == "string" then mutationId else nil)
+	if #list > 0 then
+		text ..= " · " .. MutationUtil.DisplayNames(list)
 	end
 	if weightKg then
 		text ..= string.format(" · %.2f kg", weightKg)

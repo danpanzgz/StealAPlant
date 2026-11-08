@@ -31,7 +31,20 @@ SoundConfig.Sfx = {
 	EggHatch = { id = "rbxasset://sounds/victory.wav", volume = 0.9, speed = 1.2 }, -- se abre
 	Alarm = { id = "", volume = 0.7 }, -- alarma del jardín
 	StealResolved = { id = "", volume = 0.7 },
+	Click = { id = "rbxasset://sounds/clickfast.wav", volume = 0.45, speed = 1.1 }, -- cualquier botón
+	MenuOpen = { id = "rbxasset://sounds/switch.wav", volume = 0.55 }, -- abrir/cerrar menú
+	PlantPlace = { id = "rbxasset://sounds/snap.mp3", volume = 0.8, speed = 0.7 }, -- flor colocada
+	EventStart = { id = "rbxasset://sounds/victory.wav", volume = 0.7, speed = 1.4 }, -- empieza un evento
+	EventEnd = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.6, speed = 0.7 },
 	DailyReward = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.8 },
+} :: { [string]: SfxDef }
+
+-- Ambiente en bucle. "Garden" suena siempre; el resto solo durante su evento
+-- (clave = id del evento en EventConfig). Pega aquí tus ids (vacío = silencio).
+SoundConfig.Ambient = {
+	Garden = { id = "", volume = 0.25 }, -- pájaros / viento
+	RainShower = { id = "", volume = 0.5 }, -- lluvia
+	GoldRush = { id = "", volume = 0.35 }, -- brillos / campanillas
 } :: { [string]: SfxDef }
 
 -- Canciones de fondo (se reproducen en bucle, en orden aleatorio).

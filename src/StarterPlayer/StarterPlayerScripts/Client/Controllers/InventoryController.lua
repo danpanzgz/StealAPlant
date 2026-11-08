@@ -18,6 +18,7 @@ local ClientState = require(script.Parent.Parent.ClientState)
 local PlantController = require(script.Parent.PlantController)
 local FarmArt = require(script.Parent.Parent.Modules.FarmArt)
 local EffectsController = require(script.Parent.EffectsController)
+local AudioController = require(script.Parent.AudioController)
 
 local InventoryController = {}
 local player = Players.LocalPlayer
@@ -179,6 +180,9 @@ local PLACE_REASONS: { [string]: string } = {
 local placementZone: Part? = nil
 local placementGhost: Part? = nil
 local placementConn: RBXScriptConnection? = nil
+local placementInputConn: RBXScriptConnection? = nil
+local placementGui: ScreenGui? = nil
+local placing = false
 
 local function getYardFloor(): BasePart?
 	local gardens = workspace:FindFirstChild("Gardens")
@@ -198,6 +202,14 @@ local function isInsideYard(floor: BasePart, position: Vector3): boolean
 end
 
 local function stopPlacementPreview()
+	if placementInputConn then
+		placementInputConn:Disconnect()
+		placementInputConn = nil
+	end
+	if placementGui then
+		placementGui:Destroy()
+		placementGui = nil
+	end
 	if placementConn then
 		placementConn:Disconnect()
 		placementConn = nil
@@ -211,6 +223,9 @@ local function stopPlacementPreview()
 		placementGhost = nil
 	end
 end
+
+local confirmAt: (Vector2?) -> ()
+local placeAtFeet: () -> ()
 
 local function newPreviewPart(name: string, color: Color3, transparency: number): Part
 	local part = Instance.new("Part")
@@ -237,7 +252,7 @@ local function startPlacementPreview()
 	local zone = newPreviewPart("PlacementZone", Color3.fromRGB(110, 230, 120), 0.7)
 	zone.Size = Vector3.new(floor.Size.X - margin * 2, 0.1, floor.Size.Z - margin * 2)
 	zone.CFrame = floor.CFrame * CFrame.new(0, 0, 0)
-	zone.Position = Vector3.new(zone.Position.X, 0.32, zone.Position.Z)
+	zone.Position = Vector3.new(zone.Position.X, floor.Position.Y + floor.Size.Y / 2 + 0.08, zone.Position.Z)
 	zone.Parent = workspace
 	placementZone = zone
 
@@ -245,6 +260,46 @@ local function startPlacementPreview()
 	ghost.Size = Vector3.new(3, 0.3, 3)
 	ghost.Parent = workspace
 	placementGhost = ghost
+
+	-- Entrada directa (ratón o toque): no depende de InputContext.
+	placementInputConn = UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
+		if processed or not pendingPlantPlacementUid then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			confirmAt(Vector2.new(input.Position.X, input.Position.Y))
+		elseif input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.X then
+			InventoryController.CancelPlacement()
+		elseif input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.ButtonA then
+			placeAtFeet()
+		end
+	end)
+
+	-- Botones en pantalla (móvil y PC): colocar a mis pies / cancelar.
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "PlacementPanel"
+	gui.ResetOnSpawn = false
+	gui.DisplayOrder = 80
+	gui.IgnoreGuiInset = true
+	gui.Parent = player:WaitForChild("PlayerGui")
+	placementGui = gui
+	local bar = Instance.new("Frame")
+	bar.BackgroundTransparency = 1
+	bar.AnchorPoint = Vector2.new(0.5, 1)
+	bar.Position = UDim2.new(0.5, 0, 1, -110)
+	bar.Size = UDim2.fromOffset(330, 100)
+	bar.Parent = gui
+	local tip = UI.Label(bar, "Toca el suelo verde de tu jardín", UDim2.new(1, 0, 0, 24), UDim2.fromOffset(0, 0), Color3.new(1, 1, 1))
+	tip.TextSize = 16
+	tip.TextStrokeTransparency = 0.3
+	local feet = UI.Button(bar, "📍 Colocar aquí", UI.Colors.Green, UDim2.new(0.58, -4, 0, 48), UDim2.new(0, 0, 0, 34))
+	feet.Activated:Connect(function()
+		placeAtFeet()
+	end)
+	local cancel = UI.Button(bar, "✖ Cancelar", Color3.fromRGB(200, 70, 70), UDim2.new(0.42, -4, 0, 48), UDim2.new(0.58, 4, 0, 34))
+	cancel.Activated:Connect(function()
+		InventoryController.CancelPlacement()
+	end)
 
 	placementConn = RunService.RenderStepped:Connect(function()
 		local camera = workspace.CurrentCamera
@@ -264,7 +319,7 @@ local function startPlacementPreview()
 		end
 		ghost.Transparency = 0.35
 		ghost.Color = if isInsideYard(floor, hit.Position) then Color3.fromRGB(110, 230, 120) else Color3.fromRGB(235, 90, 80)
-		ghost.Position = Vector3.new(hit.Position.X, 0.45, hit.Position.Z)
+		ghost.Position = Vector3.new(hit.Position.X, floor.Position.Y + floor.Size.Y / 2 + 0.2, hit.Position.Z)
 	end)
 end
 
@@ -285,8 +340,36 @@ function InventoryController.CancelPlacement()
 	hud.Push("Colocación cancelada", "warn")
 end
 
-function InventoryController.ConfirmPlacement(screenPosition: Vector2)
-	if not pendingPlantPlacementUid then
+local function sendPlacement(position: Vector3)
+	if placing or not pendingPlantPlacementUid then
+		return
+	end
+	local floor = getYardFloor()
+	if floor and not isInsideYard(floor, position) then
+		hud.Push(PLACE_REASONS.invalid_garden_position, "warn")
+		return
+	end
+	placing = true
+	local ok, result = pcall(function()
+		return placePlantFn:InvokeServer(pendingPlantPlacementUid, position)
+	end)
+	placing = false
+	if ok and result and result.success then
+		pendingPlantPlacementUid = nil
+		setPlacementContextEnabled(false)
+		stopPlacementPreview()
+		PlantController.RestoreSlapTool()
+		hud.Push("¡Flor colocada en tu jardín!", "good")
+		AudioController.Play("PlantPlace")
+	else
+		local reason = tostring(if ok and result then result.reason else "error")
+		-- La colocación sigue activa: el jugador puede probar otro punto.
+		hud.Push(PLACE_REASONS[reason] or ("No se pudo colocar: " .. reason), "warn")
+	end
+end
+
+confirmAt = function(screenPosition: Vector2?)
+	if not pendingPlantPlacementUid or not screenPosition then
 		return
 	end
 	local camera = workspace.CurrentCamera
@@ -303,25 +386,29 @@ function InventoryController.ConfirmPlacement(screenPosition: Vector2)
 		hud.Push("Elige un punto visible dentro de tu jardín.", "warn")
 		return
 	end
+	sendPlacement(hit.Position)
+end
 
-	local floor = getYardFloor()
-	if floor and not isInsideYard(floor, hit.Position) then
-		hud.Push(PLACE_REASONS.invalid_garden_position, "warn")
+placeAtFeet = function()
+	if not pendingPlantPlacementUid then
 		return
 	end
-
-	local result = placePlantFn:InvokeServer(pendingPlantPlacementUid, hit.Position)
-	if result and result.success then
-		pendingPlantPlacementUid = nil
-		setPlacementContextEnabled(false)
-		stopPlacementPreview()
-		PlantController.RestoreSlapTool()
-		hud.Push("Flor colocada en tu jardín", "good")
-	else
-		local reason = tostring(result and result.reason or "error")
-		-- La colocación sigue activa: el jugador puede probar otro punto.
-		hud.Push(PLACE_REASONS[reason] or ("No se pudo colocar: " .. reason), "warn")
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not root then
+		return
 	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character :: Instance }
+	-- Un poco por delante del jugador para no taparse con sus pies.
+	local origin = root.Position + root.CFrame.LookVector * 3
+	local hit = workspace:Raycast(origin, Vector3.new(0, -30, 0), params)
+	sendPlacement(if hit then hit.Position else Vector3.new(origin.X, root.Position.Y - 3, origin.Z))
+end
+
+function InventoryController.ConfirmPlacement(screenPosition: Vector2)
+	confirmAt(screenPosition)
 end
 
 local function makeTabBar()
@@ -589,7 +676,7 @@ local function addPlantRows(order: number)
 			local card = UI.Card(listFrame, 94, order)
 			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
 			cropIcon.Position = UDim2.fromOffset(8, 6)
-			local title = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutation, plant.weight), UDim2.new(1, -82, 0, 24), UDim2.new(0, 68, 0, 5), rarity.color)
+			local title = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutations or plant.mutation, plant.weight), UDim2.new(1, -82, 0, 24), UDim2.new(0, 68, 0, 5), rarity.color)
 			title.TextTruncate = Enum.TextTruncate.AtEnd
 			UI.Label(
 				card,
@@ -638,7 +725,7 @@ local function addPlantRows(order: number)
 			local card = UI.Card(listFrame, 66, order)
 			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
 			cropIcon.Position = UDim2.fromOffset(8, 5)
-			local placedTitle = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutation, plant.weight), UDim2.new(1, -164, 0, 24), UDim2.new(0, 68, 0, 6), rarity.color)
+			local placedTitle = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutations or plant.mutation, plant.weight), UDim2.new(1, -164, 0, 24), UDim2.new(0, 68, 0, 6), rarity.color)
 			placedTitle.TextTruncate = Enum.TextTruncate.AtEnd
 			UI.Label(card, "$" .. UI.Money(plant.incomePerMinute or 0) .. " por minuto", UDim2.new(1, -164, 0, 18), UDim2.new(0, 68, 0, 34), UI.Colors.Muted, false)
 			local collectButton = UI.Button(card, "Recoger", UI.Colors.Blue, UDim2.new(0, 72, 0, 34), UDim2.new(1, -82, 0.5, -17))

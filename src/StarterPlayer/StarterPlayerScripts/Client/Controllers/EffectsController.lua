@@ -9,6 +9,8 @@
 ]]
 
 local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -19,6 +21,7 @@ local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
 local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
 local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
+local MutationUtil = require(ReplicatedStorage.Shared.Modules.MutationUtil)
 
 local Client = script.Parent.Parent
 local UI = require(Client.UI)
@@ -409,8 +412,8 @@ local function showDiscovery(info: any)
 	crop.ZIndex = 23
 	scaleArt(crop, 1.2)
 
-	local mutationData = if info.mutation then MutationConfig[info.mutation] else nil
-	local nameText = data.displayName .. (if mutationData then " · " .. tostring(info.mutation) else "")
+	local discoveredMutations = MutationUtil.List(info.mutations, info.mutation)
+	local nameText = data.displayName .. (if #discoveredMutations > 0 then " · " .. MutationUtil.DisplayNames(discoveredMutations) else "")
 	local name = UI.Label(card, nameText, UDim2.new(1, -110, 0, 26), UDim2.fromOffset(98, 32), Color3.new(1, 1, 1))
 	name.ZIndex = 22
 	local detail = UI.Label(card, (if rarity then rarity.displayName else data.rarity) .. " · Índice " .. info.discovered .. "/" .. info.total, UDim2.new(1, -110, 0, 20), UDim2.fromOffset(98, 60), rarityColor, false)
@@ -460,7 +463,99 @@ local function processDiscoveries()
 	end)
 end
 
+-- ===== Clima de eventos (lluvia, fiebre del oro) =====
+-- Solo visual y barato: un emisor que sigue a la cámara + un tinte suave.
+local weatherPart: Part? = nil
+local weatherConn: RBXScriptConnection? = nil
+local weatherCC: ColorCorrectionEffect? = nil
+local weatherEmitters: { ParticleEmitter } = {}
+
+local function clearWeather()
+	if weatherConn then
+		weatherConn:Disconnect()
+		weatherConn = nil
+	end
+	local part = weatherPart
+	local cc = weatherCC
+	weatherPart = nil
+	weatherCC = nil
+	weatherEmitters = {}
+	if part then
+		part:Destroy()
+	end
+	if cc then
+		local tween = TweenService:Create(cc, TweenInfo.new(1.5), { TintColor = Color3.new(1, 1, 1), Saturation = 0, Brightness = 0 })
+		tween:Play()
+		tween.Completed:Once(function()
+			cc:Destroy()
+		end)
+	end
+end
+
+local function startWeather(eventId: string)
+	clearWeather()
+	local part = Instance.new("Part")
+	part.Name = "WeatherEmitter"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanTouch = false
+	part.CanQuery = false
+	part.Transparency = 1
+	part.Size = Vector3.new(60, 1, 60)
+	part.Parent = Workspace
+	weatherPart = part
+
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Name = "EventTint"
+	cc.Parent = Lighting
+	weatherCC = cc
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.EmissionDirection = Enum.NormalId.Bottom
+	emitter.Shape = Enum.ParticleEmitterShape.Box
+	emitter.Parent = part
+	if eventId == "RainShower" then
+		emitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+		emitter.Color = ColorSequence.new(Color3.fromRGB(150, 200, 255))
+		emitter.Rate = 140
+		emitter.Lifetime = NumberRange.new(1.1, 1.4)
+		emitter.Speed = NumberRange.new(55, 70)
+		emitter.Acceleration = Vector3.new(0, -30, 0)
+		emitter.SpreadAngle = Vector2.new(3, 3)
+		emitter.Size = NumberSequence.new(0.18)
+		emitter.Transparency = NumberSequence.new(0.45)
+		emitter.Orientation = Enum.ParticleOrientation.VelocityParallel
+		emitter.LockedToPart = false
+		TweenService:Create(cc, TweenInfo.new(1.5), { TintColor = Color3.fromRGB(190, 210, 235), Brightness = -0.06, Saturation = -0.1 }):Play()
+	else
+		emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		emitter.Color = ColorSequence.new(Color3.fromRGB(255, 220, 90))
+		emitter.EmissionDirection = Enum.NormalId.Top
+		emitter.Rate = 18
+		emitter.Lifetime = NumberRange.new(2, 3)
+		emitter.Speed = NumberRange.new(1, 3)
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0) })
+		emitter.LightEmission = 0.8
+		TweenService:Create(cc, TweenInfo.new(1.5), { TintColor = Color3.fromRGB(255, 240, 200), Saturation = 0.15 }):Play()
+	end
+	table.insert(weatherEmitters, emitter)
+
+	weatherConn = RunService.RenderStepped:Connect(function()
+		local camera = Workspace.CurrentCamera
+		if camera and weatherPart then
+			weatherPart.Position = camera.CFrame.Position + Vector3.new(0, 28, 0)
+		end
+	end)
+end
+
 function EffectsController.Init(hud: any)
+	Net.GetRemoteEvent("GlobalEventUpdated").OnClientEvent:Connect(function(state: any)
+		if type(state) == "table" and state.active then
+			startWeather(tostring(state.id))
+		else
+			clearWeather()
+		end
+	end)
 	fxGui = Instance.new("ScreenGui")
 	fxGui.Name = "EffectsGui"
 	fxGui.ResetOnSpawn = false
