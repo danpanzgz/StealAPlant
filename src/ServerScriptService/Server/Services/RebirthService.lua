@@ -10,6 +10,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
 local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
+local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
@@ -18,13 +20,13 @@ local InventoryService = require(script.Parent.InventoryService)
 local PlantService = require(script.Parent.PlantService)
 local GardenService = require(script.Parent.GardenService)
 local DefenseService = require(script.Parent.DefenseService)
+local SlapService = require(script.Parent.SlapService)
 
 local RebirthService = {}
 local notificationEvent = Net.GetRemoteEvent("NotificationPush")
 
 local function getRebirthCost(profile: any): number
-	local rebirths = profile.rebirthCount or 0
-	return math.floor(GameConfig.RebirthBaseCost * (GameConfig.RebirthCostMultiplier ^ rebirths))
+	return RebirthConfig.Cost(profile.rebirthCount or 0)
 end
 
 function RebirthService.GetCost(player: Player): number
@@ -33,6 +35,38 @@ function RebirthService.GetCost(player: Player): number
 		return 0
 	end
 	return getRebirthCost(profile)
+end
+
+-- Estado para la UI: coste, planta a sacrificar, si la tienes y qué ganas.
+function RebirthService.GetInfo(player: Player): any?
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return nil
+	end
+	local rebirths = profile.rebirthCount or 0
+	local sacrificeId = RebirthConfig.SacrificeFor(rebirths + 1)
+	local owned = 0
+	for _, plant in ipairs(profile.inventory.plants or {}) do
+		if plant.plantId == sacrificeId then
+			owned += 1
+		end
+	end
+	local tier = RebirthConfig.StickTiers[RebirthConfig.StickTier(rebirths + 1)]
+	return {
+		rebirths = rebirths,
+		cost = getRebirthCost(profile),
+		cash = profile.cash,
+		sacrificeId = sacrificeId,
+		sacrificeName = PlantConfig[sacrificeId].displayName,
+		sacrificeOwned = owned,
+		nextMultiplier = RebirthConfig.CashMultiplier(rebirths + 1),
+		multiplier = RebirthConfig.CashMultiplier(rebirths),
+		nextLuck = RebirthConfig.Luck(rebirths + 1),
+		luck = RebirthConfig.Luck(rebirths),
+		nextPlots = GardenConfig.GetMaxPlots(rebirths + 1),
+		plots = GardenConfig.GetMaxPlots(rebirths),
+		nextStick = tier.name,
+	}
 end
 
 function RebirthService.TryRebirth(player: Player): (boolean, any)
@@ -46,12 +80,27 @@ function RebirthService.TryRebirth(player: Player): (boolean, any)
 		return false, "not_enough_cash"
 	end
 
+	-- Sacrificio: una copia de la planta pedida, de la mochila.
+	local sacrificeId = RebirthConfig.SacrificeFor((profile.rebirthCount or 0) + 1)
+	local sacrificeIndex: number? = nil
+	for index, plant in ipairs(profile.inventory.plants or {}) do
+		if plant.plantId == sacrificeId then
+			sacrificeIndex = index
+			break
+		end
+	end
+	if not sacrificeIndex then
+		return false, "missing_sacrifice"
+	end
+
 	local ok = EconomyService.TryRemoveCash(player, cost, "rebirth")
 	if not ok then
 		return false, "not_enough_cash"
 	end
 
+	table.remove(profile.inventory.plants, sacrificeIndex)
 	profile.rebirthCount = (profile.rebirthCount or 0) + 1
+	player:SetAttribute("Luck", RebirthConfig.Luck(profile.rebirthCount))
 	for _, plotData in pairs(profile.plots or {}) do
 		if type(plotData) == "table" and PlantConfig[plotData.plantId] then
 			local seeds = profile.inventory.seeds
@@ -61,7 +110,6 @@ function RebirthService.TryRebirth(player: Player): (boolean, any)
 	profile.plots = {}
 	profile.defenses = {}
 	DefenseService.Clear(player)
-	profile.unlockedZones = { "StarterMeadow" }
 	profile.questProgress = {}
 	local lifetimeEarnings = profile.totalCashEarned or 0
 	profile.cash = 0
@@ -72,14 +120,14 @@ function RebirthService.TryRebirth(player: Player): (boolean, any)
 	PlantService.ResetPlots(player)
 	GardenService.RefreshFence(player) -- valla y cartel suben de estilo con cada Rebirth
 
-	local bonusCash = math.floor(lifetimeEarnings * GameConfig.RebirthCashBonus)
-	if bonusCash > 0 then
-		EconomyService.AddCash(player, bonusCash, "rebirth_bonus")
-	end
+	local _ = lifetimeEarnings
+	local bonusCash = 0
+	SlapService.RefreshTool(player) -- el palo sube de nivel solo
 
 	DataService.MarkDirty(player)
 	notificationEvent:FireClient(player, {
-		text = "♻️ Rebirth #" .. profile.rebirthCount .. " completado. +$" .. bonusCash .. " de bonificación",
+		text = "♻️ Rebirth #" .. profile.rebirthCount .. " · cobras x" .. RebirthConfig.CashMultiplier(profile.rebirthCount)
+			.. " · suerte x" .. RebirthConfig.Luck(profile.rebirthCount),
 		kind = "good",
 	})
 

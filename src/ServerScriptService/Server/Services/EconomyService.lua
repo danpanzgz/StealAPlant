@@ -37,6 +37,7 @@ function EconomyService.AddCash(player: Player, amount: number, source: string?)
 	end
 	profile.cash += amount
 	profile.totalCashEarned += amount
+	profile.stats.lifetimeCash = (profile.stats.lifetimeCash or 0) + amount
 	DataService.MarkDirty(player)
 	pushCashUpdate(player, profile)
 end

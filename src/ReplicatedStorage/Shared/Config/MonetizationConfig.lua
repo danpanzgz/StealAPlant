@@ -47,11 +47,6 @@ MonetizationConfig.GamePasses = {
 		offlineMinutes = 360,
 		offlineCashMultiplier = 1.25,
 	},
-	ExtraSlots = {
-		id = 0, displayName = "+3 Huecos de flores", robux = 149,
-		description = "Puedes colocar 3 flores más en tu jardín para ganar más Cash.",
-		extraPlaceSlots = 3,
-	},
 	ExtraSpeed = {
 		id = 0, displayName = "Velocidad extra", robux = 149,
 		description = "Corres un 25% más rápido: llegas antes a la tienda y a tu base.",
@@ -75,7 +70,7 @@ MonetizationConfig.GamePasses = {
 } :: { [string]: any }
 
 MonetizationConfig.PassOrder = {
-	"SeasonPass", "DoubleCash", "VIP", "ExtraSlots", "GreenThumb", "OfflineFarmer", "LuckyMutation", "ExtraSpeed", "ShieldMaster",
+	"SeasonPass", "DoubleCash", "VIP", "GreenThumb", "OfflineFarmer", "LuckyMutation", "ExtraSpeed", "ShieldMaster",
 }
 
 -- Multiplicadores de los boosts temporales.

@@ -3,9 +3,9 @@
 	GardenConfig.lua
 	Define los 3 niveles de jardín. Cada jugador tiene un jardín propio
 	(ver GardenService) que empieza en el nivel 1 y se puede mejorar
-	comprando el siguiente nivel con Cash. Subir de nivel:
-	  - añade más plots (parcelas) para plantar
-	  - añade más slots de defensa contra robos
+	comprando el siguiente nivel con Cash. Subir de nivel añade más slots de
+	defensa contra robos. El tamaño del jardín es FIJO y el número de huecos
+	para plantar solo crece al renacer (GardenConfig.GetMaxPlots).
 ]]
 
 export type GardenLevelData = {
@@ -43,6 +43,14 @@ local Levels: { [number]: GardenLevelData } = {
 }
 
 GardenConfig.Levels = Levels
+
+-- Huecos para plantar: solo aumentan al renacer (el patio no cambia de tamaño).
+GardenConfig.PlotsBase = 6
+GardenConfig.PlotsPerRebirth = 2
+GardenConfig.PlotsMax = 20
+function GardenConfig.GetMaxPlots(rebirths: number): number
+	return math.min(GardenConfig.PlotsMax, GardenConfig.PlotsBase + GardenConfig.PlotsPerRebirth * math.max(0, math.floor(rebirths)))
+end
 GardenConfig.MaxLevel = 3
 
 -- Layout físico: separación entre parcelas y tamaño del terreno asignado

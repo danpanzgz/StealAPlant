@@ -54,6 +54,7 @@ Net.RemoteEventNames = {
 	"GlobalEventUpdated",       -- server -> client: estado de evento temporal
 	"InventoryUpdated",         -- server -> client: inventario de semillas completo (autoritativo)
 	"ShopStockUpdated",         -- server -> client: restock compartido cada 5 minutos
+	"SlapHit",                  -- server -> client: empujón cómico recibido (el cliente mueve su propio personaje)
 	"SlapAction",               -- client -> server: golpe cómico con palo, sin daño
 	"PlantPlanted",             -- server -> client: semilla plantada (animación de tierra)
 	"PlantDiscovered",          -- server -> client: primera vez que se consigue una planta (Índice)
@@ -87,6 +88,14 @@ Net.RemoteFunctionNames = {
 	"SellCollectionPlant",      -- client -> server: vender una flor de la colección
 	"ToggleGardenShield",       -- client -> server: activar o apagar el domo del jardín
 	"UnlockIncubator",          -- client -> server: comprar el incubador del jardín
+	"GetRebirthInfo",           -- client -> server: coste, sacrificio y beneficios del próximo renacimiento
+	"GetIndexData",             -- client -> server: récords de peso y estadísticas totales (Índice)
+	"SellHeld",                 -- client -> server: vender la planta de la mano (puesto de venta)
+	"SellAll",                  -- client -> server: vender todas las plantas de la mochila (puesto de venta)
+	"SetHotbar",                -- client -> server: guardar la distribución de la barra rápida
+	"GetHotbar",                -- client -> server: leer la barra rápida guardada
+	"GetSellQuote",             -- client -> server: precios de venta (mano / todo)
+	"GetShopStock",             -- client -> server: stock de una tienda física concreta
 	"GetSeasonStatus",          -- client -> server: nivel, XP y premios del Pase de Temporada
 	"ClaimSeasonReward",        -- client -> server: reclamar un premio (nivel + pista) o todos
 }

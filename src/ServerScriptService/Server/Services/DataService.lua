@@ -70,7 +70,6 @@ local function newDefaultProfile(): any
 		equippedGear = {},
 		shopPurchases = {},
 		defenses = {}, -- [slotIndex] = { defenseId, placedAt }
-		unlockedZones = { "StarterMeadow" },
 		ownedGamePasses = {},
 		questProgress = {},
 		receipts = {}, -- [tostring(PurchaseId)] = true (compras ya concedidas)
@@ -83,7 +82,11 @@ local function newDefaultProfile(): any
 			plantsHarvested = 0,
 			plantsStolen = 0,
 			plantsLost = 0,
+			plantsPlanted = 0,
+			lifetimeCash = 0, -- Cash ganado en total, no se reinicia al renacer
 		},
+		plantRecords = {}, -- [plantId] = { min, max, count } peso en kg (Índice)
+		hotbar = {}, -- [1..8] = { kind = "stick"|"seed"|"plant"|"gear", id = string }
 		rebirthCount = 0,
 		lastSeenAt = os.time(),
 		createdAt = os.time(),
@@ -197,6 +200,15 @@ local function fromSaveData(data: any): any
 		end
 	end
 	data.incubatorUnlocked = data.incubatorUnlocked == true
+	data.stats = type(data.stats) == "table" and data.stats or {}
+	for _, key in ipairs({ "plantsHarvested", "plantsStolen", "plantsLost", "plantsPlanted", "lifetimeCash" }) do
+		data.stats[key] = type(data.stats[key]) == "number" and data.stats[key] or 0
+	end
+	if data.stats.lifetimeCash < (data.totalCashEarned or 0) then
+		data.stats.lifetimeCash = data.totalCashEarned or 0
+	end
+	data.plantRecords = type(data.plantRecords) == "table" and data.plantRecords or {}
+	data.hotbar = type(data.hotbar) == "table" and data.hotbar or {}
 	data.equippedGear = type(data.equippedGear) == "table" and data.equippedGear or {}
 	data.shopPurchases = type(data.shopPurchases) == "table" and data.shopPurchases or {}
 	data.version = 2

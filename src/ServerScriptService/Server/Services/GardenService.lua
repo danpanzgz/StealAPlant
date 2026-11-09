@@ -18,6 +18,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local Signal = require(ReplicatedStorage.Shared.Modules.Signal)
 
 local DataService = require(script.Parent.DataService)
@@ -69,6 +70,8 @@ local function createPlotPart(player: Player, plotIndex: number, position: Vecto
 	part.Position = position
 	part.Material = Enum.Material.Grass
 	part.Color = Color3.fromRGB(91, 154, 76)
+	part.Transparency = 1 -- el hueco no se ve: la planta trae su propia tierra labrada
+	part.CanQuery = false
 	part:SetAttribute("PlotIndex", plotIndex)
 	part:SetAttribute("OwnerUserId", player.UserId)
 	return part
@@ -129,9 +132,11 @@ local function buildGateSign(yard: Folder, center: Vector3, style: any, ownerNam
 end
 
 local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount: number, minimumRows: number?)
-	local rowCount = math.max(4, math.ceil(plotCount / 4), minimumRows or 0)
-	local frontZ = -7
-	local backZ = math.max(37, (rowCount - 1) * GardenConfig.PlotSpacing + 7)
+	-- Tamaño FIJO: el patio nunca crece (antes se comía la calle y la tienda).
+	local _ = plotCount
+	local __ = minimumRows
+	local frontZ = GardenConfig.YardFrontZ
+	local backZ = GardenConfig.YardBackZ
 	local depth = backZ - frontZ
 	local centerZ = (frontZ + backZ) / 2
 
@@ -142,7 +147,8 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 
 	-- Si nada cambió (misma profundidad, estilo y nombre) no reconstruimos:
 	-- colocar flores llama a esto muy a menudo.
-	local key = table.concat({ tostring(depth), tostring(tier), ownerName, tostring(rebirths) }, ":")
+	local row = (gardenModel:GetAttribute("Row") :: number?) or 0
+	local key = table.concat({ tostring(depth), tostring(tier), ownerName, tostring(rebirths), tostring(row) }, ":")
 	local oldYard = gardenModel:FindFirstChild("YardBoundary")
 	if oldYard and gardenModel:GetAttribute("YardKey") == key then
 		return
@@ -168,10 +174,12 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 	-- Suelo del jardín: cara superior en y=0.22 (por encima del césped, 0.16).
 	local floor = mk(yard, "GardenFloor", Vector3.new(44, 0.4, depth), origin + Vector3.new(15, 0.02, centerZ), Color3.fromRGB(120, 85, 55), Enum.Material.Ground, true)
 	floor.CastShadow = true
-	-- Camino de losas desde cada puerta hacia el centro (decorativo).
-	for _, z in ipairs({ frontZ, backZ }) do
-		local dir = if z == frontZ then 1 else -1
-		mk(yard, "GatePaving", Vector3.new(6, 0.12, 5), origin + Vector3.new(15, 0.26, z + dir * 3), Color3.fromRGB(190, 180, 160), Enum.Material.Cobblestone, false)
+	-- UNA sola entrada, la que da a la calle: fila sur por detrás, fila norte por delante.
+	local gateZ = if row == 0 then backZ else frontZ
+	local closedZ = if row == 0 then frontZ else backZ
+	do
+		local dir = if gateZ == frontZ then 1 else -1
+		mk(yard, "GatePaving", Vector3.new(6, 0.12, 5), origin + Vector3.new(15, 0.26, gateZ + dir * 3), Color3.fromRGB(190, 180, 160), Enum.Material.Cobblestone, false)
 	end
 
 	local lanternColor = if style.sparkle then style.capColor else Color3.fromRGB(255, 226, 130)
@@ -234,13 +242,12 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 	-- Lados completos y frentes con hueco de puerta (x 8..22).
 	run("z", -7, frontZ, backZ)
 	run("z", 37, frontZ, backZ)
-	run("x", frontZ, -7, 8)
-	run("x", frontZ, 22, 37)
-	run("x", backZ, -7, 8)
-	run("x", backZ, 22, 37)
+	run("x", gateZ, -7, 8)
+	run("x", gateZ, 22, 37)
+	run("x", closedZ, -7, 37) -- lado cerrado: valla continua, sin puerta
 
-	-- Puertas: dos pilares con viga y cartel con el nombre del dueño.
-	for _, z in ipairs({ frontZ, backZ }) do
+	-- Puerta única: dos pilares con viga y cartel con el nombre del dueño.
+	for _, z in ipairs({ gateZ }) do
 		for _, x in ipairs({ 8, 22 }) do
 			mk(yard, "GatePillar", Vector3.new(1.5, 7, 1.5), origin + Vector3.new(x, 3.5, z), style.gateColor, style.gateMaterial, true)
 			mk(yard, "GatePillarCap", Vector3.new(2, 0.5, 2), origin + Vector3.new(x, 7.25, z), style.capShape == "none" and style.railColor or style.capColor, if style.capShape == "none" then Enum.Material.Wood else style.capMaterial, false)
@@ -286,6 +293,11 @@ local function ensurePlotsExist(player: Player, gardenModel: Model, targetPlotCo
 			local row = math.floor((plotIndex - 1) / columns)
 			local localOffset = Vector3.new(col * GardenConfig.PlotSpacing, 0, row * GardenConfig.PlotSpacing)
 			local worldPosition = (gardenModel:GetPivot().Position) + localOffset
+			local saved = DataService.GetProfile(player)
+			local savedPlot = saved and saved.plots and saved.plots[plotIndex]
+			if type(savedPlot) == "table" and type(savedPlot.pos) == "table" and type(savedPlot.pos.x) == "number" and type(savedPlot.pos.z) == "number" then
+				worldPosition = gardenModel:GetPivot().Position + Vector3.new(savedPlot.pos.x, 0, savedPlot.pos.z)
+			end
 
 			local part = createPlotPart(player, plotIndex, worldPosition)
 			part.Parent = gardenModel
@@ -314,6 +326,7 @@ function GardenService.AssignGarden(player: Player)
 
 	local slot = takeSlot()
 	assignedSlots[player.UserId] = slot
+	player:SetAttribute("Luck", RebirthConfig.Luck(profile.rebirthCount or 0))
 
 	local layout = GardenConfig.GetSlotLayout(slot)
 	local origin = layout.origin
@@ -378,8 +391,7 @@ function GardenService.AssignGarden(player: Player)
 			highestSavedPlot = math.max(highestSavedPlot, plotIndex)
 		end
 	end
-	local levelData = GardenConfig.Levels[profile.gardenLevel] or GardenConfig.Levels[1]
-	ensurePlotsExist(player, gardenModel, math.max(levelData.plotCount, highestSavedPlot + 1))
+	ensurePlotsExist(player, gardenModel, math.max(GardenConfig.GetMaxPlots(profile.rebirthCount or 0), highestSavedPlot))
 end
 
 function GardenService.GetPlotPart(player: Player, plotIndex: number): BasePart?
@@ -477,21 +489,28 @@ function GardenService.PlaceEmptyPlotAt(player: Player, position: Vector3): numb
 	return selectedIndex
 end
 
+-- Los huecos son los que permite el renacimiento; nunca se crean más.
 function GardenService.EnsureAvailablePlot(player: Player)
 	local profile = DataService.GetProfile(player)
 	local gardenModel = gardenModelByUser[player.UserId]
-	local userPlots = plotPartsByUser[player.UserId]
-	if not profile or not gardenModel or not userPlots then
-		return
+	if profile and gardenModel then
+		ensurePlotsExist(player, gardenModel, GardenConfig.GetMaxPlots(profile.rebirthCount or 0))
 	end
+end
 
-	for plotIndex in pairs(userPlots) do
-		if profile.plots[plotIndex] == nil then
-			return
+-- Huecos libres / totales (para mostrar "3/6" y el error de jardín lleno).
+function GardenService.GetPlotUsage(player: Player): (number, number)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0, 0
+	end
+	local used = 0
+	for _, plotData in pairs(profile.plots) do
+		if plotData ~= nil then
+			used += 1
 		end
 	end
-
-	ensurePlotsExist(player, gardenModel, GardenService.GetCurrentPlotCount(player) + 1)
+	return used, GardenConfig.GetMaxPlots(profile.rebirthCount or 0)
 end
 
 -- Actualiza valla y cartel (p. ej. tras un Rebirth o cambiar el nombre).
@@ -503,20 +522,12 @@ function GardenService.RefreshFence(player: Player)
 	end
 	gardenModel:SetAttribute("Rebirths", profile.rebirthCount or 0)
 	gardenModel:SetAttribute("OwnerName", player.DisplayName)
+	ensurePlotsExist(player, gardenModel, GardenConfig.GetMaxPlots(profile.rebirthCount or 0))
 	rebuildGardenYard(gardenModel, gardenModel:GetPivot().Position, GardenService.GetCurrentPlotCount(player), nil)
 end
 
-function GardenService.ExpandGardenForPlants(player: Player, activePlantCount: number)
-	local gardenModel = gardenModelByUser[player.UserId]
-	if not gardenModel then
-		return
-	end
-	rebuildGardenYard(
-		gardenModel,
-		gardenModel:GetPivot().Position,
-		GardenService.GetCurrentPlotCount(player),
-		activePlantCount + 1
-	)
+function GardenService.ExpandGardenForPlants(_player: Player, _activePlantCount: number)
+	-- El jardín tiene tamaño fijo (no-op conservado por compatibilidad).
 end
 
 -- Sube el nivel de jardín del jugador si tiene Cash suficiente.
@@ -540,11 +551,6 @@ function GardenService.UpgradeGarden(player: Player, EconomyService: any): (bool
 
 	profile.gardenLevel = nextLevel
 	DataService.MarkDirty(player)
-
-	local gardenModel = gardenModelByUser[player.UserId]
-	if gardenModel then
-		ensurePlotsExist(player, gardenModel, nextLevelData.plotCount)
-	end
 
 	return true, nextLevel
 end

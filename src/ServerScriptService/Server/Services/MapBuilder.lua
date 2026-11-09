@@ -14,7 +14,6 @@ local StarterPlayer = game:GetService("StarterPlayer")
 local Workspace = game:GetService("Workspace")
 
 local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
-local ZoneConfig = require(ReplicatedStorage.Shared.Config.ZoneConfig)
 
 local MapBuilder = {}
 
@@ -387,7 +386,7 @@ function MapBuilder.BuildWorld()
 	local roadWidth = GardenConfig.StreetWidth - 4
 	part(map, "StreetEdge", Vector3.new(streetMaxX - streetMinX, 0.22, GardenConfig.StreetWidth), Vector3.new(C.X, 0.11, C.Z), Color3.fromRGB(162, 177, 133), Enum.Material.Slate)
 	part(map, "StreetRoad", Vector3.new(streetMaxX - streetMinX - 2, 0.26, roadWidth), Vector3.new(C.X, 0.14, C.Z), COBBLE, Enum.Material.Cobblestone)
-	-- Caminos a las dos puertas de cada jardín (empedrado hasta la calle).
+	-- Camino a la única puerta de cada jardín (la que da a la calle).
 	for column = 0, GardenConfig.GardensPerRow - 1 do
 		local gateX = column * GardenConfig.GardenSlotSpacing + 15
 		part(map, "GatePathSouth", Vector3.new(12, 0.2, 5), Vector3.new(gateX, 0.12, southBackZ + 4.5), COBBLE, Enum.Material.Cobblestone)
@@ -420,16 +419,6 @@ function MapBuilder.BuildWorld()
 	for _, dx in ipairs({ -34, 34 }) do
 		buildBench(map, C + Vector3.new(dx, 0.6, 12), 0)
 		buildBench(map, C + Vector3.new(dx, 0.6, -12), 180)
-	end
-
-	-- Carteles de zona, delante de las tiendas.
-	for i, zoneId in ipairs(ZoneConfig.Order) do
-		local zone = ZoneConfig[zoneId]
-		local pos = C + Vector3.new((i - 2) * 13, 0, -13)
-		part(map, "SignPost", Vector3.new(0.8, 5, 0.8), pos + Vector3.new(0, 2.5, 0), Color3.fromRGB(120, 85, 55), Enum.Material.Wood)
-		local board = part(map, "ZoneSign_" .. zoneId, Vector3.new(8, 3.4, 0.6), pos + Vector3.new(0, 5.5, 0), Color3.fromRGB(95, 160, 220))
-		local req = zone.unlockCash > 0 and ("🔒 $" .. zone.unlockCash .. " ganados") or "✅ Libre"
-		billboard(board, "Zona " .. zone.order .. "\n" .. zone.displayName .. "\n" .. req, UDim2.fromOffset(130, 34), Vector3.new(0, 0, 0), 32)
 	end
 
 	-- Spawn de la plaza (por defecto; cada jugador aparece en su jardín).

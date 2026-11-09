@@ -24,6 +24,7 @@ local EventService = require(script.Parent.EventService)
 local MonetizationService = require(script.Parent.MonetizationService)
 local OfflineEarningsService = require(script.Parent.OfflineEarningsService)
 local RebirthService = require(script.Parent.RebirthService)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
 local SeasonService = require(script.Parent.SeasonService)
@@ -319,6 +320,45 @@ function RemoteHandlers.Init()
 			return { success = false, reason = reason }
 		end
 		return { success = true, target = target.Name, plantId = tostring(plantId), amount = count }
+	end
+
+	Net.GetRemoteFunction("GetRebirthInfo").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetRebirthInfo") then
+			return RATE_LIMITED
+		end
+		local info = RebirthService.GetInfo(player)
+		return { success = info ~= nil, info = info }
+	end
+
+	Net.GetRemoteFunction("GetIndexData").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetIndexData") then
+			return RATE_LIMITED
+		end
+		local profile = DataService.GetProfile(player)
+		if not profile then
+			return { success = false, reason = "no_profile" }
+		end
+		local records = {}
+		for plantId, record in pairs(profile.plantRecords or {}) do
+			records[plantId] = { min = record.min, max = record.max, count = record.count }
+		end
+		local used, max = GardenService.GetPlotUsage(player)
+		return {
+			success = true,
+			records = records,
+			index = profile.plantIndex or {},
+			stats = {
+				lifetimeCash = profile.stats.lifetimeCash,
+				plantsPlanted = profile.stats.plantsPlanted,
+				plantsHarvested = profile.stats.plantsHarvested,
+				plantsStolen = profile.stats.plantsStolen,
+				rebirths = profile.rebirthCount or 0,
+				luck = RebirthConfig.Luck(profile.rebirthCount or 0),
+				cashMultiplier = RebirthConfig.CashMultiplier(profile.rebirthCount or 0),
+				plotsUsed = used,
+				plotsMax = max,
+			},
+		}
 	end
 
 	Net.GetRemoteFunction("RebirthPlayer").OnServerInvoke = function(player: Player)
