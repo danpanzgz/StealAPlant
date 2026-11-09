@@ -334,7 +334,6 @@ function MapBuilder.BuildWorld()
 	local net = part(map, "SafetyNet", Vector3.new(widthX + 400, 4, depthZ + 400), Vector3.new((minX + maxX) / 2, -30, (minZ + maxZ) / 2), Color3.new(1, 1, 1), nil, true)
 	net.Transparency = 1
 	net.CanQuery = false
-	workspace.FallenPartsDestroyHeight = -400
 
 	-- Seto perimetral pegado al muro: el borde del mundo se ve como un seto
 	-- cuidado con arbustos redondos, no como un precipicio.
