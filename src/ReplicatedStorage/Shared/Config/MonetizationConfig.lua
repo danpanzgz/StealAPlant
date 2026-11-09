@@ -62,6 +62,10 @@ MonetizationConfig.GamePasses = {
 		description = "El domo de tu jardín dura un 50% más (45 s → 68 s).",
 		domeMultiplier = 1.5,
 	},
+	SeasonPass = {
+		id = 0, displayName = "🏆 Pase de Temporada", robux = 449,
+		description = "Desbloquea la pista premium: 30 niveles de packs, huevos, tótems, boosts y Cash extra. Cada temporada dura 30 días.",
+	},
 	VIP = {
 		id = 0, displayName = "VIP", robux = 299,
 		description = "+15% Cash, un pack Rare gratis cada día al reclamar la recompensa y etiqueta VIP.",
@@ -71,7 +75,7 @@ MonetizationConfig.GamePasses = {
 } :: { [string]: any }
 
 MonetizationConfig.PassOrder = {
-	"DoubleCash", "VIP", "ExtraSlots", "GreenThumb", "OfflineFarmer", "LuckyMutation", "ExtraSpeed", "ShieldMaster",
+	"SeasonPass", "DoubleCash", "VIP", "ExtraSlots", "GreenThumb", "OfflineFarmer", "LuckyMutation", "ExtraSpeed", "ShieldMaster",
 }
 
 -- Multiplicadores de los boosts temporales.
@@ -156,6 +160,16 @@ MonetizationConfig.DevProducts = {
 		grants = { seedPacks = { Legendary = 2 } },
 	},
 
+	-- ===== Pase de Temporada =====
+	SeasonSkip = {
+		id = 0, kind = "seasonLevels", levels = 1, robux = 39, displayName = "🏆 +1 nivel de temporada",
+		description = "Sube un nivel del Pase de Temporada al instante.",
+	},
+	SeasonSkip5 = {
+		id = 0, kind = "seasonLevels", levels = 5, robux = 149, badge = "-25%", displayName = "🏆 +5 niveles de temporada",
+		description = "Sube cinco niveles del Pase de Temporada al instante.",
+	},
+
 	-- ===== Cash =====
 	CashSmall = { id = 0, kind = "cash", displayName = "💰 Small Cash Pack", robux = 19, cash = 10000 },
 	CashMedium = { id = 0, kind = "cash", displayName = "💰 Medium Cash Pack", robux = 49, cash = 60000 },
@@ -169,6 +183,7 @@ MonetizationConfig.Sections = {
 	{ title = "⚡ Boosts", products = { "BoostAll", "BoostCash", "BoostGrowth", "BoostLuck" } },
 	{ title = "🛠️ Utilidades", products = { "InstantGrow", "ShieldHour" } },
 	{ title = "📦 Paquetes", products = { "EpicBundle", "EggBundle", "LegendaryBundle" } },
+	{ title = "🏆 Pase de Temporada", products = { "SeasonSkip", "SeasonSkip5" } },
 	{ title = "💰 Cash", products = { "CashSmall", "CashMedium", "CashLarge", "CashHuge" } },
 } :: { { title: string, products: { string } } }
 

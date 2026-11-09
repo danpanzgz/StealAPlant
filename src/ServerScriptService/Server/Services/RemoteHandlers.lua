@@ -26,6 +26,7 @@ local OfflineEarningsService = require(script.Parent.OfflineEarningsService)
 local RebirthService = require(script.Parent.RebirthService)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
+local SeasonService = require(script.Parent.SeasonService)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 
 local RemoteHandlers = {}
@@ -207,6 +208,29 @@ function RemoteHandlers.Init()
 			return { success = true, slot = resultOrReason.slot, cash = EconomyService.GetCash(player) }
 		end
 		return { success = false, reason = resultOrReason }
+	end
+
+	Net.GetRemoteFunction("GetSeasonStatus").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetSeasonStatus") then
+			return RATE_LIMITED
+		end
+		local status = SeasonService.GetStatus(player)
+		if not status then
+			return { success = false, reason = "no_profile" }
+		end
+		return { success = true, status = status }
+	end
+
+	Net.GetRemoteFunction("ClaimSeasonReward").OnServerInvoke = function(player: Player, level: any, track: any)
+		if isRateLimited(player, "ClaimSeasonReward") then
+			return RATE_LIMITED
+		end
+		if level == "all" then
+			local count = SeasonService.ClaimAll(player)
+			return { success = count > 0, count = count, status = SeasonService.GetStatus(player) }
+		end
+		local ok, reason = SeasonService.Claim(player, level, track)
+		return { success = ok, reason = reason, status = SeasonService.GetStatus(player) }
 	end
 
 	Net.GetRemoteFunction("ClaimDailyReward").OnServerInvoke = function(player: Player)

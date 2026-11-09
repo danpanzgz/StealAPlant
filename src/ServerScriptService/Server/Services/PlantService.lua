@@ -51,6 +51,30 @@ local floweringPlants = {
 	PhoenixBloom = true,
 	CosmicPeony = true,
 	AuroraLotus = true,
+	Lavender = true,
+	FrostLily = true,
+	ThunderBloom = true,
+	SolarSunflower = true,
+	MoltenLily = true,
+	StarBlossom = true,
+	ObsidianRose = true,
+	MoonLotus = true,
+	HeavenSeed = true,
+	BlackLotus = true,
+	GlitchPlant = true,
+}
+
+-- Plantas con luz propia (Legendary+ de brillo especial).
+local glowingPlants = {
+	PhoenixBloom = true,
+	AuroraLotus = true,
+	ThunderBloom = true,
+	MoltenLily = true,
+	StarBlossom = true,
+	MoonLotus = true,
+	HeavenSeed = true,
+	BlackLotus = true,
+	GlitchPlant = true,
 }
 
 -- ===== Utilidades =====
@@ -224,7 +248,7 @@ local function addPollenEffect(adornee: BasePart, plantId: string, color: Color3
 	pollen.LightEmission = 0.35
 	pollen.Parent = attachment
 
-	if plantId == "PhoenixBloom" or plantId == "AuroraLotus" then
+	if glowingPlants[plantId] then
 		local glow = Instance.new("PointLight")
 		glow.Name = "BloomGlow"
 		glow.Color = color

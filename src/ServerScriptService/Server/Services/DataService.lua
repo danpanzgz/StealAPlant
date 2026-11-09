@@ -76,6 +76,7 @@ local function newDefaultProfile(): any
 		receipts = {}, -- [tostring(PurchaseId)] = true (compras ya concedidas)
 		oncePurchased = {}, -- [productKey] = true (ofertas de una sola compra)
 		boosts = {}, -- [cash|growth|luck] = os.time() en que termina el boost
+		season = { id = 0, xp = 0, free = {}, premium = {} }, -- Pase de Temporada (SeasonService lo reinicia al cambiar de temporada)
 		lastDailyRewardAt = 0,
 		dailyRewardStreak = 0,
 		stats = {

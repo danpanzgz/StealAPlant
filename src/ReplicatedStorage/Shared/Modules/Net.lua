@@ -57,6 +57,7 @@ Net.RemoteEventNames = {
 	"SlapAction",               -- client -> server: golpe cómico con palo, sin daño
 	"PlantPlanted",             -- server -> client: semilla plantada (animación de tierra)
 	"PlantDiscovered",          -- server -> client: primera vez que se consigue una planta (Índice)
+	"SeasonUpdated",            -- server -> client: estado del Pase de Temporada
 }
 
 Net.RemoteFunctionNames = {
@@ -86,6 +87,8 @@ Net.RemoteFunctionNames = {
 	"SellCollectionPlant",      -- client -> server: vender una flor de la colección
 	"ToggleGardenShield",       -- client -> server: activar o apagar el domo del jardín
 	"UnlockIncubator",          -- client -> server: comprar el incubador del jardín
+	"GetSeasonStatus",          -- client -> server: nivel, XP y premios del Pase de Temporada
+	"ClaimSeasonReward",        -- client -> server: reclamar un premio (nivel + pista) o todos
 }
 
 local eventCache: { [string]: RemoteEvent } = {}

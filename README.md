@@ -1,4 +1,4 @@
-# Steal a Plant — Estructura del proyecto (v1.0)
+# Steal a Plant — Estructura del proyecto (v1.1)
 
 Simulador multiplayer de cultivo, colección, mutaciones y robo entre
 jugadores. Clasificación de madurez: **MinimalViolence (Occasional/Mild)** —
@@ -56,13 +56,14 @@ StealAPlant/
 | Archivo | Contenido |
 |---|---|
 | `GameConfig` | Ajustes globales, versión, DataStore, robo, rebirth, offline |
-| `PlantConfig` / `PlantInstanceConfig` | Catálogo de especies; tamaños (Normal/Big/Giant), peso, nombre mostrado y cupo de flores colocadas |
+| `PlantConfig` / `PlantInstanceConfig` | Catálogo de **57 especies** (9 Common, 10 Uncommon, 10 Rare, 9 Epic, 7 Legendary, 6 Mythic, 6 Celestial);  tamaños (Normal/Big/Giant), peso, nombre mostrado y cupo de flores colocadas |
 | `MutationConfig` | Efectos: Wet, Frozen, Shiny, Gold, Rainbow, Diamond (probabilidad y multiplicador) |
 | `RarityConfig` | 7 rarezas, Common → Celestial |
 | `PetConfig` | 35 mascotas (5 por rareza), bonus por rareza y animal de cada una |
 | `GardenConfig` | Niveles, layout de 12 jardines y **6 estilos de valla por Rebirth** |
 | `EventConfig` | RainShower (crecimiento x1.2 + Wet) y GoldRush (venta x1.5) |
 | `SoundConfig` | Efectos, ambiente por evento y música (ids vacíos = silencio) |
+| `SeasonConfig` | Pase de Temporada: 30 niveles, XP por acción, premios free/premium, ciclo de 30 días |
 | `ShopConfig`, `DefenseConfig`, `QuestConfig`, `DailyRewardConfig`, `ZoneConfig`, `MonetizationConfig` | Tienda, defensas, misiones, recompensa diaria, zonas, pases y productos |
 
 ### Services (servidor)
@@ -71,13 +72,13 @@ StealAPlant/
 `PlantService` (crecimiento, mutaciones, flores colocadas),
 `ShopService` + `StockService`, `StealService`, `SlapService`,
 `DefenseService`, `QuestService`, `DailyRewardService`, `EventService`,
-`LeaderboardService`, `MonetizationService` (`ProcessReceipt` idempotente),
+`LeaderboardService`, `SeasonService` (XP, niveles y premios), `MonetizationService` (`ProcessReceipt` idempotente),
 `OfflineEarningsService`, `RebirthService`, `PetService`, `ZoneService`,
 `MapBuilder` (mapa y atmósfera por código) y `RemoteHandlers`.
 
 ### Controladores (cliente)
 `HUDController`, `ShopController`, `InventoryController`, `GardenController`,
-`QuestController`, `LeaderboardController`, `StoreController`,
+`QuestController`, `SeasonController`, `LeaderboardController`, `StoreController`,
 `PlantController`, `SlapController`, `StealController`, `PromptController`,
 `ProgressController`, `IndexController` (Plant Index), `AudioController`,
 `EffectsController` (animaciones, clima de eventos) y `SkyController`
@@ -147,6 +148,16 @@ cuadrado en capas y nubes voxel rosas (`SkyController`), colinas de fondo.
 - **Plant Index**: la primera vez que consigues una especie se anima y se
   registra en el índice (`IndexController`).
 
+### Pase de Temporada
+Temporadas de 30 días calculadas con `os.time()` (sin mantenimiento): al
+cambiar, el XP y los premios reclamados se reinician. 30 niveles con **pista
+gratis** y **pista premium** (Game Pass `SeasonPass`, 449 R$). El XP sale de
+jugar (plantar 4, cosechar 12, robar 50, defender 40, misión 60, recompensa
+diaria 40, abrir huevo 30). Se puede comprar +1 / +5 niveles (Developer
+Products `SeasonSkip` / `SeasonSkip5`). Los premios premium ya ganados se
+pueden reclamar al comprar el pase más tarde. Servidor autoritativo: el
+cliente solo pide `ClaimSeasonReward(nivel, pista)`.
+
 ### Ciclo de colección y tienda
 - Las semillas se consumen al plantar; el jardín crea parcelas adicionales
   cuando hacen falta. Cosechar da una flor individual persistente (rareza,
@@ -185,6 +196,7 @@ los precios son puntos de partida a ajustar con datos reales. Los IDs están en
 | **Utilidades** | ⏩ Crecimiento instantáneo 29 R$ · 🛡️ Escudo 30 min 39 R$ |
 | **Paquetes** | Pack Epic x3 79 R$ · Huevos Rare x3 59 R$ · Pack Legendary x2 199 R$ |
 | **Cash** | 19 / 49 / 149 / 399 R$ (10k / 60k / 250k / 1M) |
+| **Temporada** | 🏆 Pase 449 R$ (pista premium) · +1 nivel 39 R$ · +5 niveles 149 R$ |
 | **Pases** | x2 Cash 79 · VIP 299 (+15% Cash, pack Rare diario) · +3 huecos de flores 149 · Pulgar verde 99 · Granjero incansable 149 · Lucky Mutation 199 · Velocidad extra 149 · Maestro del escudo 249 |
 
 Los boosts se guardan como hora de fin en el perfil; la tienda muestra los

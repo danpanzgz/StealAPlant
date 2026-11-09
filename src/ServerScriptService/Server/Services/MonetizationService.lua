@@ -182,6 +182,8 @@ function grantProduct(player: Player, profile: any, product: any)
 		require(script.Parent.PlantService).InstantGrowAll(player)
 	elseif kind == "shield" then
 		require(script.Parent.StealService).GrantShield(player, product.seconds)
+	elseif kind == "seasonLevels" then
+		require(script.Parent.SeasonService).AddLevels(player, product.levels)
 	elseif kind == "bundle" then
 		local grants = product.grants
 		if grants.cash then

@@ -14,6 +14,8 @@ local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local SeasonConfig = require(ReplicatedStorage.Shared.Config.SeasonConfig)
+local SeasonService = require(script.Parent.SeasonService)
 
 local QuestService = {}
 
@@ -77,6 +79,10 @@ function QuestService.Report(player: Player, kind: string, amount: number)
 	if not profile then
 		return
 	end
+	local seasonXp = SeasonConfig.XpPerAction[kind]
+	if seasonXp then
+		SeasonService.AddXP(player, seasonXp)
+	end
 	local qp = ensure(profile)
 	local changed = false
 	for _, entry in ipairs(qp.list) do
@@ -117,6 +123,7 @@ function QuestService.Claim(player: Player, questId: any): (boolean, any)
 			EconomyService.AddCash(player, def.rewardCash, "quest")
 			DataService.MarkDirty(player)
 			questUpdatedEvent:FireClient(player, QuestService.GetState(player))
+			SeasonService.AddXP(player, SeasonConfig.XpQuestClaim)
 			return true, def.rewardCash
 		end
 	end
