@@ -284,10 +284,11 @@ function RemoteHandlers.Init()
 			return { success = false, reason = "player_not_found" }
 		end
 		local ok, reason
+		local count = 1
 		if itemKind == "plant" then
 			ok, reason = InventoryService.GiftPlant(player, target, tostring(plantId))
 		else
-			local count = tonumber(amount) or 1
+			count = tonumber(amount) or 1
 			ok, reason = InventoryService.GiftSeed(player, target, tostring(plantId), count)
 		end
 		if not ok then

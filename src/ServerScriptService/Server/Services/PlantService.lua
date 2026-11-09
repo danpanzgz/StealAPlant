@@ -88,6 +88,12 @@ local function getPlotProgress(plotData: any, plantData: any): number
 	return math.clamp(elapsed / plantData.growTimeSeconds, 0, 1)
 end
 
+-- ¿Está madura? (cuenta eventos, mascotas y boosts, igual que la cosecha).
+function PlantService.IsMature(plotData: any): boolean
+	local plantData = PlantConfig[plotData.plantId]
+	return plantData ~= nil and getPlotProgress(plotData, plantData) >= 1
+end
+
 local function rollSize(player: Player): string
 	local weights = {}
 	local totalWeight = 0

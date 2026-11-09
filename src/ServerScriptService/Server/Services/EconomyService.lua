@@ -27,7 +27,8 @@ end
 -- Añade Cash de forma segura. "source" es solo para logging/analytics
 -- (ej: "harvest", "steal", "daily_reward", "devproduct").
 function EconomyService.AddCash(player: Player, amount: number, source: string?)
-	if amount <= 0 then
+	-- NaN/infinito/negativo nunca tocan el saldo (NaN <= 0 es false, por eso se comprueba aparte).
+	if amount ~= amount or amount == math.huge or amount <= 0 then
 		return
 	end
 	local profile = DataService.GetProfile(player)
@@ -44,6 +45,9 @@ end
 -- SIEMPRE se debe comprobar el valor de retorno antes de otorgar lo que
 -- sea que el jugador esté comprando.
 function EconomyService.TryRemoveCash(player: Player, amount: number, source: string?): boolean
+	if amount ~= amount or amount == math.huge then
+		return false
+	end
 	if amount <= 0 then
 		return true
 	end

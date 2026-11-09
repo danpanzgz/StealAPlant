@@ -64,8 +64,8 @@ end
 
 local function onPlayerAdded(player: Player)
 	DataService.LoadProfile(player)
-	if not player.Parent then
-		return
+	if not player.Parent or not DataService.GetProfile(player) then
+		return -- expulsado (sesión abierta en otro servidor) o sin perfil
 	end
 	PetService.LoadPlayer(player)
 

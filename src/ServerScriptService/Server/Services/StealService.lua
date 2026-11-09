@@ -275,7 +275,7 @@ local function attemptSteal(thief: Player, owner: Player, plotIndex: number, plo
 		notify(thief, "Ya no hay planta aquí", "warn")
 		return
 	end
-	if (os.time() - plotData.plantedAt) < plantData.growTimeSeconds then
+	if not PlantService.IsMature(plotData) then
 		notify(thief, "🌱 Aún está creciendo", "warn")
 		return
 	end
