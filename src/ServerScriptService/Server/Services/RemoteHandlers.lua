@@ -26,6 +26,7 @@ local OfflineEarningsService = require(script.Parent.OfflineEarningsService)
 local RebirthService = require(script.Parent.RebirthService)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
+local SeasonService = require(script.Parent.SeasonService)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 
 local RemoteHandlers = {}
@@ -209,6 +210,29 @@ function RemoteHandlers.Init()
 		return { success = false, reason = resultOrReason }
 	end
 
+	Net.GetRemoteFunction("GetSeasonStatus").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetSeasonStatus") then
+			return RATE_LIMITED
+		end
+		local status = SeasonService.GetStatus(player)
+		if not status then
+			return { success = false, reason = "no_profile" }
+		end
+		return { success = true, status = status }
+	end
+
+	Net.GetRemoteFunction("ClaimSeasonReward").OnServerInvoke = function(player: Player, level: any, track: any)
+		if isRateLimited(player, "ClaimSeasonReward") then
+			return RATE_LIMITED
+		end
+		if level == "all" then
+			local count = SeasonService.ClaimAll(player)
+			return { success = count > 0, count = count, status = SeasonService.GetStatus(player) }
+		end
+		local ok, reason = SeasonService.Claim(player, level, track)
+		return { success = ok, reason = reason, status = SeasonService.GetStatus(player) }
+	end
+
 	Net.GetRemoteFunction("ClaimDailyReward").OnServerInvoke = function(player: Player)
 		if isRateLimited(player, "ClaimDailyReward") then
 			return RATE_LIMITED
@@ -284,10 +308,11 @@ function RemoteHandlers.Init()
 			return { success = false, reason = "player_not_found" }
 		end
 		local ok, reason
+		local count = 1
 		if itemKind == "plant" then
 			ok, reason = InventoryService.GiftPlant(player, target, tostring(plantId))
 		else
-			local count = tonumber(amount) or 1
+			count = tonumber(amount) or 1
 			ok, reason = InventoryService.GiftSeed(player, target, tostring(plantId), count)
 		end
 		if not ok then
@@ -334,6 +359,8 @@ function RemoteHandlers.Init()
 			defenses = defenses,
 			stats = profile.stats,
 			passes = MonetizationService.GetOwned(player),
+			boosts = profile.boosts or {},
+			oncePurchased = profile.oncePurchased or {},
 			event = EventService.GetState(),
 			catalog = ShopService.GetAvailableCatalog(player),
 		}

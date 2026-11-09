@@ -20,6 +20,7 @@ local PlantController = require(Client.Controllers.PlantController)
 local InventoryController = require(Client.Controllers.InventoryController)
 local GardenController = require(Client.Controllers.GardenController)
 local QuestController = require(Client.Controllers.QuestController)
+local SeasonController = require(Client.Controllers.SeasonController)
 local LeaderboardController = require(Client.Controllers.LeaderboardController)
 local StoreController = require(Client.Controllers.StoreController)
 local PromptController = require(Client.Controllers.PromptController)
@@ -27,6 +28,7 @@ local SlapController = require(Client.Controllers.SlapController)
 local IndexController = require(Client.Controllers.IndexController)
 local AudioController = require(Client.Controllers.AudioController)
 local EffectsController = require(Client.Controllers.EffectsController)
+local SkyController = require(Client.Controllers.SkyController)
 
 local getSnapshotFn = Net.GetRemoteFunction("GetPlayerProfileSnapshot")
 
@@ -61,6 +63,8 @@ ClientState.SetInventoryFromSnapshot(snapshot.inventory)
 ClientState.GardenLevel = snapshot.gardenLevel
 ClientState.Defenses = snapshot.defenses
 ClientState.Passes = snapshot.passes
+ClientState.Boosts = snapshot.boosts or {}
+ClientState.OncePurchased = snapshot.oncePurchased or {}
 ClientState.PlacedPlants = snapshot.placedPlants or {}
 ClientState.EquippedGear = snapshot.equippedGear or {}
 
@@ -74,11 +78,13 @@ local function safeInit(name: string, init: () -> ())
 end
 
 HUDController.Init(snapshot)
+safeInit("SkyController", function() SkyController.Init() end)
 safeInit("ShopController", function() ShopController.Init(snapshot, HUDController) end)
 safeInit("PlantController", function() PlantController.Init(HUDController) end)
 safeInit("InventoryController", function() InventoryController.Init(HUDController) end)
 safeInit("GardenController", function() GardenController.Init(HUDController) end)
 safeInit("QuestController", function() QuestController.Init(HUDController) end)
+safeInit("SeasonController", function() SeasonController.Init(HUDController) end)
 safeInit("LeaderboardController", function() LeaderboardController.Init(HUDController) end)
 safeInit("StoreController", function() StoreController.Init(HUDController) end)
 safeInit("PromptController", function() PromptController.Init() end)

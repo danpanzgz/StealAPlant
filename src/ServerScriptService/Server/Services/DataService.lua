@@ -6,12 +6,17 @@
 	  - Carga con reintentos (backoff exponencial).
 	  - Autosave periódico, guardado al salir y en BindToClose.
 	  - Un perfil que falló al cargar NUNCA sobreescribe datos reales.
+	  - Session locking: cada perfil queda "bloqueado" por el servidor que lo
+	    usa (UpdateAsync). Dos servidores nunca editan el mismo jugador a la
+	    vez, así que no hay pérdida de datos al cambiar de servidor ni
+	    duplicación de objetos.
 	  - "Reconcile": perfiles antiguos reciben los campos nuevos.
 	  - plots/defenses usan claves numéricas dispersas en memoria; el
 	    DataStore no las admite, así que se guardan con claves string.
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -23,6 +28,14 @@ local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
 local DataService = {}
 
 local playerStore = DataStoreService:GetDataStore(GameConfig.DataStoreName)
+
+-- Identificador de ESTE servidor (en Studio JobId está vacío).
+local JOB_ID: string = if game.JobId ~= "" then game.JobId else ("studio-" .. HttpService:GenerateGUID(false))
+-- Un lock sin refrescar durante este tiempo se considera de un servidor caído.
+-- El autosave lo renueva cada GameConfig.AutosaveInterval segundos.
+local LOCK_TIMEOUT = 6 * 60
+local LOCK_RETRIES = 6
+local LOCK_RETRY_WAIT = 4
 
 local function deepCopy(value: any): any
 	if type(value) ~= "table" then
@@ -61,6 +74,9 @@ local function newDefaultProfile(): any
 		ownedGamePasses = {},
 		questProgress = {},
 		receipts = {}, -- [tostring(PurchaseId)] = true (compras ya concedidas)
+		oncePurchased = {}, -- [productKey] = true (ofertas de una sola compra)
+		boosts = {}, -- [cash|growth|luck] = os.time() en que termina el boost
+		season = { id = 0, xp = 0, free = {}, premium = {} }, -- Pase de Temporada (SeasonService lo reinicia al cambiar de temporada)
 		lastDailyRewardAt = 0,
 		dailyRewardStreak = 0,
 		stats = {
@@ -211,14 +227,66 @@ local function attemptWithRetries(fn: () -> any, maxRetries: number): (boolean, 
 	return false, nil
 end
 
+-- Formato guardado: { _format = 3, lock = { jobId, at }?, data = <perfil> }.
+-- Perfiles antiguos (sin _format) se leen tal cual y se migran al guardar.
+local function unwrap(raw: any): (any, any)
+	if type(raw) == "table" and raw._format == 3 then
+		return raw.data, raw.lock
+	end
+	return raw, nil
+end
+
+local function lockedByOther(lock: any): boolean
+	return type(lock) == "table"
+		and lock.jobId ~= JOB_ID
+		and os.time() - (tonumber(lock.at) or 0) < LOCK_TIMEOUT
+end
+
+-- Reclama el perfil con UpdateAsync. Devuelve (ok, datos, bloqueadoPorOtroServidor).
+local function claimProfile(key: string): (boolean, any, boolean)
+	local result = { data = nil :: any, locked = false }
+	local ok = attemptWithRetries(function()
+		playerStore:UpdateAsync(key, function(old: any)
+			local data, lock = unwrap(old)
+			if lockedByOther(lock) then
+				result.locked = true
+				return nil -- cancelar: otro servidor lo está usando
+			end
+			result.locked = false
+			result.data = data
+			return { _format = 3, lock = { jobId = JOB_ID, at = os.time() }, data = data }
+		end)
+		return true
+	end, GameConfig.MaxSaveRetries)
+	return ok, result.data, result.locked
+end
+
+-- Valores imposibles (NaN, negativos, infinitos) nunca entran a la partida.
+local function sanitizeNumber(value: any, fallback: number): number
+	if type(value) ~= "number" or value ~= value or value == math.huge or value == -math.huge or value < 0 then
+		return fallback
+	end
+	return value
+end
+
 function DataService.LoadProfile(player: Player)
 	local key = "Player_" .. player.UserId
 
-	local ok, data = attemptWithRetries(function()
-		return playerStore:GetAsync(key)
-	end, GameConfig.MaxSaveRetries)
+	local ok, data, locked = claimProfile(key)
+	local tries = 1
+	while ok and locked and tries < LOCK_RETRIES and player.Parent do
+		-- Otro servidor aún tiene al jugador (acaba de cambiar de servidor).
+		task.wait(LOCK_RETRY_WAIT)
+		ok, data, locked = claimProfile(key)
+		tries += 1
+	end
 
 	if not player.Parent then
+		return
+	end
+
+	if ok and locked then
+		player:Kick("Tu partida sigue abierta en otro servidor. Espera unos segundos y vuelve a entrar.")
 		return
 	end
 
@@ -240,6 +308,10 @@ function DataService.LoadProfile(player: Player)
 	local profileData
 	if type(data) == "table" then
 		profileData = fromSaveData(data)
+		profileData.cash = sanitizeNumber(profileData.cash, GameConfig.StarterCash)
+		profileData.totalCashEarned = sanitizeNumber(profileData.totalCashEarned, 0)
+		profileData.gardenLevel = math.max(1, math.floor(sanitizeNumber(profileData.gardenLevel, 1)))
+		profileData.rebirthCount = math.floor(sanitizeNumber(profileData.rebirthCount, 0))
 	else
 		profileData = newDefaultProfile()
 	end
@@ -281,9 +353,33 @@ function DataService.SaveProfile(player: Player, isFinalSave: boolean?): boolean
 	end
 
 	local key = "Player_" .. player.UserId
+	local lostLock = false
 	local ok = attemptWithRetries(function()
-		playerStore:SetAsync(key, toSaveData(entry.data))
+		playerStore:UpdateAsync(key, function(old: any)
+			local _, lock = unwrap(old)
+			if lockedByOther(lock) then
+				lostLock = true
+				return nil -- otro servidor es el dueño: no pisamos sus datos
+			end
+			lostLock = false
+			return {
+				_format = 3,
+				-- El guardado final libera el lock; los demás lo renuevan.
+				lock = if isFinalSave then nil else { jobId = JOB_ID, at = os.time() },
+				data = toSaveData(entry.data),
+			}
+		end)
+		return true
 	end, GameConfig.MaxSaveRetries)
+
+	if lostLock then
+		warn("[DataService] Perdido el lock de", player.Name, "- otro servidor usa su perfil")
+		entry.loaded = false -- no volver a guardar desde este servidor
+		if player.Parent and not isFinalSave then
+			player:Kick("Tu partida se abrió en otro servidor. Vuelve a entrar.")
+		end
+		return false
+	end
 
 	if ok then
 		entry.dirty = false
@@ -298,6 +394,9 @@ function DataService.ReleaseProfile(player: Player)
 end
 
 Players.PlayerRemoving:Connect(function(player)
+	-- Un frame de cortesía: los demás servicios (p. ej. devolver una flor
+	-- que se estaba robando) terminan de tocar el perfil antes del guardado.
+	task.wait()
 	local profile = DataService.GetProfile(player)
 	if profile then
 		profile.lastSeenAt = os.time()

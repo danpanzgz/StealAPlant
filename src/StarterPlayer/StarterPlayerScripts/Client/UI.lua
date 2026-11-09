@@ -4,7 +4,21 @@
 	Helpers mínimos para construir la interfaz por código (mobile-first).
 ]]
 
+local TweenService = game:GetService("TweenService")
+
 local UI = {}
+
+-- Degradado suave (luz arriba, sombra abajo): da volumen sin perder el estilo pixel.
+local function addGradient(target: GuiObject, strength: number)
+	local gradient = Instance.new("UIGradient")
+	gradient.Name = "Shine"
+	gradient.Rotation = 90
+	gradient.Color = ColorSequence.new(
+		Color3.new(1, 1, 1):Lerp(Color3.new(0, 0, 0), 0),
+		Color3.new(1, 1, 1):Lerp(Color3.new(0, 0, 0), strength)
+	)
+	gradient.Parent = target
+end
 
 UI.Colors = {
 	Panel = Color3.fromRGB(79, 58, 39),
@@ -69,6 +83,26 @@ function UI.Button(parent: Instance, text: string, background: Color3, size: UDi
 	textConstraint.MaxTextSize = 20
 	textConstraint.Parent = button
 	local baseBorderColor = Color3.fromRGB(74, 48, 30)
+	addGradient(button, 0.22)
+
+	-- Animación de pulsación y hover: se hunde al tocar, crece al pasar el ratón.
+	local scale = Instance.new("UIScale")
+	scale.Parent = button
+	local function animate(target: number, time: number)
+		TweenService:Create(scale, TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = target }):Play()
+	end
+	button.MouseEnter:Connect(function()
+		animate(1.04, 0.1)
+	end)
+	button.MouseLeave:Connect(function()
+		animate(1, 0.12)
+	end)
+	button.MouseButton1Down:Connect(function()
+		animate(0.94, 0.06)
+	end)
+	button.MouseButton1Up:Connect(function()
+		animate(1.04, 0.1)
+	end)
 	button.SelectionGained:Connect(function()
 		button.BorderColor3 = UI.Colors.Gold
 	end)
@@ -91,6 +125,7 @@ function UI.Card(parent: Instance, height: number, order: number?): Frame
 	card.Parent = parent
 	card.BorderSizePixel = 3
 	card.BorderColor3 = Color3.fromRGB(112, 78, 43)
+	addGradient(card, 0.12)
 	return card
 end
 

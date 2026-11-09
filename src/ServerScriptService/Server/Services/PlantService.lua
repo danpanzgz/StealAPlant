@@ -51,6 +51,30 @@ local floweringPlants = {
 	PhoenixBloom = true,
 	CosmicPeony = true,
 	AuroraLotus = true,
+	Lavender = true,
+	FrostLily = true,
+	ThunderBloom = true,
+	SolarSunflower = true,
+	MoltenLily = true,
+	StarBlossom = true,
+	ObsidianRose = true,
+	MoonLotus = true,
+	HeavenSeed = true,
+	BlackLotus = true,
+	GlitchPlant = true,
+}
+
+-- Plantas con luz propia (Legendary+ de brillo especial).
+local glowingPlants = {
+	PhoenixBloom = true,
+	AuroraLotus = true,
+	ThunderBloom = true,
+	MoltenLily = true,
+	StarBlossom = true,
+	MoonLotus = true,
+	HeavenSeed = true,
+	BlackLotus = true,
+	GlitchPlant = true,
 }
 
 -- ===== Utilidades =====
@@ -86,6 +110,28 @@ local function getPlotProgress(plotData: any, plantData: any): number
 		elapsed += boostedSeconds * math.max(0, (plotData.boostMultiplier or 1) - 1)
 	end
 	return math.clamp(elapsed / plantData.growTimeSeconds, 0, 1)
+end
+
+-- ¿Está madura? (cuenta eventos, mascotas y boosts, igual que la cosecha).
+-- Producto de Robux: todas las plantas en crecimiento maduran ya.
+function PlantService.InstantGrowAll(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	for plotIndex, plotData in pairs(profile.plots) do
+		local plantData = type(plotData) == "table" and PlantConfig[plotData.plantId] or nil
+		if plantData and getPlotProgress(plotData, plantData) < 1 then
+			plotData.growthBonusSeconds = (plotData.growthBonusSeconds or 0) + plantData.growTimeSeconds
+			PlantService.RefreshPlot(player, plotIndex)
+		end
+	end
+	DataService.MarkDirty(player)
+end
+
+function PlantService.IsMature(plotData: any): boolean
+	local plantData = PlantConfig[plotData.plantId]
+	return plantData ~= nil and getPlotProgress(plotData, plantData) >= 1
 end
 
 local function rollSize(player: Player): string
@@ -202,7 +248,7 @@ local function addPollenEffect(adornee: BasePart, plantId: string, color: Color3
 	pollen.LightEmission = 0.35
 	pollen.Parent = attachment
 
-	if plantId == "PhoenixBloom" or plantId == "AuroraLotus" then
+	if glowingPlants[plantId] then
 		local glow = Instance.new("PointLight")
 		glow.Name = "BloomGlow"
 		glow.Color = color
@@ -655,6 +701,7 @@ function PlantService.PlaceCollectionPlant(player: Player, plantUid: string, req
 	end
 	local capacity = PlantInstanceConfig.PlaceCapacityBase
 		+ (profile.rebirthCount or 0) * PlantInstanceConfig.PlaceCapacityPerRebirth
+		+ MonetizationService.GetExtraPlaceSlots(player)
 	if #profile.placedPlants >= capacity then
 		return false, "plant_capacity_reached"
 	end
@@ -827,7 +874,8 @@ function PlantService.Init()
 			for _, player in ipairs(Players:GetPlayers()) do
 				local profile = DataService.GetProfile(player)
 				if profile then
-					local eventGrowth = EventService.GetGrowthMultiplier()
+					-- Evento (lluvia) y boost x2 de Robux se suman sobre todas las plantas.
+					local eventGrowth = EventService.GetGrowthMultiplier() * MonetizationService.GetBoost(player, "growth")
 					for plotIndex, plotData in pairs(profile.plots) do
 						-- Evento (lluvia x1.2): tiempo extra mientras dura.
 						if eventGrowth > 1 and type(plotData) == "table" then

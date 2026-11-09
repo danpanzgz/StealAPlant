@@ -76,6 +76,33 @@ for rarity, entries in pairs(definitions) do
 	PetConfig.PetsByRarity[rarity] = rarityPets
 end
 
+-- Qué animal es cada mascota (para la animación al abrir el huevo).
+local animals: { [string]: { string } } = {
+	MeadowCube = { "🌱", "Brote vivo" }, BerryCube = { "🫐", "Mora saltarina" },
+	PebblePup = { "🐶", "Perrito" }, CloudCub = { "🐻‍❄️", "Osito" }, SproutFrog = { "🐸", "Rana" },
+	MossBunny = { "🐰", "Conejo" }, HoneyBear = { "🐻", "Oso" }, MintFox = { "🦊", "Zorro" },
+	PondDuck = { "🦆", "Pato" }, AcornSquirrel = { "🐿️", "Ardilla" },
+	CrystalFox = { "🦊", "Zorro de cristal" }, MoonOwl = { "🦉", "Búho" }, RiverOtter = { "🦦", "Nutria" },
+	BloomDeer = { "🦌", "Ciervo" }, StormPup = { "🐺", "Cachorro de tormenta" },
+	StarDragon = { "🐲", "Dragón" }, PrismAxolotl = { "🦎", "Ajolote" }, EmberTiger = { "🐯", "Tigre" },
+	FrostWolf = { "🐺", "Lobo" }, TwilightBat = { "🦇", "Murciélago" },
+	SunPhoenix = { "🔥", "Fénix" }, RoyalLion = { "🦁", "León" }, AuroraUnicorn = { "🦄", "Unicornio" },
+	ThunderGriffin = { "🦅", "Grifo" }, GalaxyWhale = { "🐋", "Ballena" },
+	VoidSerpent = { "🐍", "Serpiente" }, CosmicDragon = { "🐉", "Dragón cósmico" }, DreamKirin = { "🦌", "Kirin" },
+	EclipseRaven = { "🐦‍⬛", "Cuervo" }, NebulaCat = { "🐱", "Gato" },
+	CelestialGuardian = { "👼", "Guardián" }, SolarFox = { "🦊", "Zorro solar" }, LunarStag = { "🦌", "Ciervo lunar" },
+	AstralDragon = { "🐲", "Dragón astral" }, InfinityTurtle = { "🐢", "Tortuga" },
+}
+
+-- Devuelve (emoji, nombre del animal) de una mascota.
+function PetConfig.GetAnimal(petId: string?): (string, string)
+	local entry = if petId then animals[petId] else nil
+	if entry then
+		return entry[1], entry[2]
+	end
+	return "🐾", "Mascota"
+end
+
 -- Bonus de la mascota EQUIPADA según su rareza (fracciones: 0.25 = +25%).
 --   cash   : ingresos por minuto, ventas y ganancias offline
 --   growth : velocidad de crecimiento de lo que plantes

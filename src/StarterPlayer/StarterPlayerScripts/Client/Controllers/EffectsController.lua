@@ -318,28 +318,82 @@ function EffectsController.HatchEgg(rarityId: string, fetch: () -> any): any
 			flash:Destroy()
 		end)
 
-		AudioController.Play("EggHatch")
 		egg:Destroy()
 		confettiBurst(overlay, UDim2.fromScale(0.5, 0.46), 36, nil, 260)
 		confettiBurst(overlay, UDim2.fromScale(0.5, 0.46), 10, "★", 200)
 
 		local petData = PetConfig.Pets[result.petId]
+		local animalEmoji, animalName = PetConfig.GetAnimal(result.petId)
+		-- Rayos giratorios del color de la rareza detrás del animal.
+		for index = 1, 2 do
+			local ray = Instance.new("Frame")
+			ray.AnchorPoint = Vector2.new(0.5, 0.5)
+			ray.Position = UDim2.fromScale(0.5, 0.5)
+			ray.Size = UDim2.fromOffset(200 + index * 40, 200 + index * 40)
+			ray.BackgroundColor3 = rarityColor
+			ray.BackgroundTransparency = 0.82
+			ray.BorderSizePixel = 0
+			ray.Rotation = index * 22
+			ray.ZIndex = 19
+			ray.Parent = stage
+			tween(ray, 7, { Rotation = ray.Rotation + (if index == 1 then 360 else -360) }, Enum.EasingStyle.Linear)
+		end
+
+		local pet: Frame? = nil
+		local silhouette: { [Frame]: Color3 } = {}
 		if petData then
-			local pet = FarmArt.CreatePetIcon(stage, petData)
-			pet.ZIndex = 24
-			local petScale = scaleArt(pet, 0.2)
+			local icon = FarmArt.CreatePetIcon(stage, petData)
+			pet = icon
+			icon.ZIndex = 24
+			local petScale = scaleArt(icon, 0.2)
 			tween(petScale, 0.5, { Scale = 3.4 }, Enum.EasingStyle.Back)
-			task.delay(0.15, function()
-				AudioController.PlayPetCry(result.petId)
-			end)
-			-- Saltito de alegría.
-			task.delay(0.55, function()
-				tween(pet, 0.18, { Position = UDim2.fromScale(0.5, 0.42) }, Enum.EasingStyle.Quad)
+			-- Primero solo la silueta: ¿qué animal será?
+			for _, descendant in ipairs(icon:GetDescendants()) do
+				if descendant:IsA("Frame") then
+					silhouette[descendant] = descendant.BackgroundColor3
+					descendant.BackgroundColor3 = Color3.fromRGB(14, 10, 20)
+				end
+			end
+		end
+
+		local question = UI.Label(overlay, "¿Qué animal será?", UDim2.fromOffset(320, 36), UDim2.new(0.5, -160, 0.46, -190), Color3.new(1, 1, 1))
+		question.TextXAlignment = Enum.TextXAlignment.Center
+		question.ZIndex = 30
+		task.wait(0.9)
+		question:Destroy()
+
+		-- Revelado: el animal recupera sus colores con destello, grito y salto.
+		AudioController.Play("EggHatch")
+		for frame, color in pairs(silhouette) do
+			tween(frame, 0.35, { BackgroundColor3 = color })
+		end
+		confettiBurst(overlay, UDim2.fromScale(0.5, 0.46), 24, animalEmoji, 240)
+		task.delay(0.1, function()
+			AudioController.PlayPetCry(result.petId)
+		end)
+		if pet then
+			local icon = pet :: Frame
+			task.delay(0.2, function()
+				tween(icon, 0.18, { Position = UDim2.fromScale(0.5, 0.42) }, Enum.EasingStyle.Quad)
 				task.delay(0.18, function()
-					tween(pet, 0.28, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Bounce)
+					tween(icon, 0.28, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Bounce)
 				end)
 			end)
 		end
+
+		-- Cartel del animal con efecto máquina de escribir.
+		local banner = UI.Label(overlay, "", UDim2.fromOffset(360, 44), UDim2.new(0.5, -180, 0.46, -190), rarityColor)
+		banner.TextXAlignment = Enum.TextXAlignment.Center
+		banner.ZIndex = 30
+		banner.TextStrokeTransparency = 0.2
+		local bannerText = animalEmoji .. " ¡" .. string.upper(animalName) .. "! " .. animalEmoji
+		task.spawn(function()
+			local length = utf8.len(bannerText) or #bannerText
+			for index = 1, length do
+				banner.Text = string.sub(bannerText, 1, (utf8.offset(bannerText, index + 1) or (#bannerText + 1)) - 1)
+				task.wait(0.04)
+			end
+		end)
 
 		local title = UI.Label(overlay, "¡" .. tostring(result.displayName) .. "!", UDim2.fromOffset(320, 40), UDim2.new(0.5, -160, 0.46, 130), Color3.new(1, 1, 1))
 		title.TextXAlignment = Enum.TextXAlignment.Center

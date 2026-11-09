@@ -11,7 +11,7 @@ GameConfig.CurrencyName = "Cash"
 
 -- Cambia esto en cada entrega: se ve en pantalla (esquina) para saber qué
 -- versión está corriendo realmente en tu Studio.
-GameConfig.Version = "v0.6 · efectos+colocar"
+GameConfig.Version = "v1.1 · temporada y plantas"
 
 -- Ritmo de crecimiento / ticks del servidor
 GameConfig.GrowthTickInterval = 1 -- segundos entre chequeos de crecimiento de planta

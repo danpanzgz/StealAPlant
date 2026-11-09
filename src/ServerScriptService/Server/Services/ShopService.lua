@@ -5,12 +5,14 @@ local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
 local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
 local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
+local SeasonConfig = require(ReplicatedStorage.Shared.Config.SeasonConfig)
 
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local InventoryService = require(script.Parent.InventoryService)
 local StockService = require(script.Parent.StockService)
 local GardenService = require(script.Parent.GardenService)
+local SeasonService = require(script.Parent.SeasonService)
 
 local ShopService = {}
 local rarityOrder: { [string]: number } = {}
@@ -233,6 +235,7 @@ function ShopService.OpenPetEgg(player: Player, rarity: string): (boolean, any)
 		InventoryService.AddPetEgg(player, rarity, 1)
 		return false, "pet_grant_failed"
 	end
+	SeasonService.AddXP(player, SeasonConfig.XpPetHatch)
 	return true, { petId = petId, displayName = PetConfig.Pets[petId].displayName }
 end
 

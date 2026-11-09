@@ -13,6 +13,10 @@ local Net = require(ReplicatedStorage.Shared.Modules.Net)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local InventoryService = require(script.Parent.InventoryService)
+local MonetizationService = require(script.Parent.MonetizationService)
+local SeasonService = require(script.Parent.SeasonService)
+local SeasonConfig = require(ReplicatedStorage.Shared.Config.SeasonConfig)
+local MonetizationConfig = require(ReplicatedStorage.Shared.Config.MonetizationConfig)
 
 local DailyRewardService = {}
 
@@ -68,6 +72,13 @@ function DailyRewardService.Claim(player: Player): (boolean, any)
 		end
 	end
 
+	-- VIP: un pack de semillas gratis cada día.
+	local vipPack = MonetizationConfig.GamePasses.VIP.dailyPackId
+	if MonetizationService.GetOwned(player).VIP and vipPack then
+		InventoryService.AddSeedPack(player, vipPack, 1)
+	end
+
+	SeasonService.AddXP(player, SeasonConfig.XpDailyClaim)
 	claimedEvent:FireClient(player, { day = day, cash = reward.cash, seeds = reward.seeds })
 	return true, { day = day, cash = reward.cash, seeds = reward.seeds }
 end

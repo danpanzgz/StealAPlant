@@ -483,6 +483,327 @@ Species.AuroraLotus = function(e)
 	leaf(e, 1.8, 0.4, -1.2, 1.0, 1.0, "leaf2", MID)
 end
 
+-- ===== Arquetipos reutilizables (siluetas distintas con pocos parámetros) =====
+
+-- Hortaliza de raíz: bulbo que asoma + penacho de hojas.
+local function rootVeg(e: Emit, w: number, h: number, leafH: number, leafKey: string)
+	box(e, 0, h / 2, 0, w, h, w, "fruit", YOUNG, "fruit")
+	box(e, 0, h + 0.1, 0, w * 0.7, 0.22, w * 0.7, "fruit2", MID, "fruit")
+	box(e, -w * 0.25, h * 0.55, -w * 0.52, w * 0.2, h * 0.3, 0.1, "fruit3", MID, "deco")
+	for i = -1, 1 do
+		box(e, i * w * 0.26, h + leafH / 2, 0, 0.2, leafH, 0.2, leafKey, YOUNG, "stem")
+		box(e, i * w * 0.4, h + leafH, 0, 0.5, 0.14, 0.32, "leaf2", MID, "leaf")
+	end
+end
+
+-- Cabeza de hojas apiladas (lechuga, col).
+local function leafyHead(e: Emit, r: number, layers: number)
+	for i = 1, layers do
+		local size = r * (1.1 - (i - 1) * 0.17)
+		box(e, 0, 0.25 + (i - 1) * 0.36, 0, size, 0.4, size, if i % 2 == 1 then "fruit" else "fruit2", YOUNG + (i / layers) * 0.3, "fruit")
+	end
+	leaf(e, -r * 0.65, 0.35, 0, r * 0.7, r * 0.5, "leaf", MID)
+	leaf(e, r * 0.65, 0.4, 0, r * 0.7, r * 0.5, "leaf2", MID)
+	leaf(e, 0, 0.3, -r * 0.65, r * 0.5, r * 0.7, "leaf", FULL)
+	leaf(e, 0, 0.45, r * 0.65, r * 0.5, r * 0.7, "leaf2", FULL)
+end
+
+-- Enredadera con vainas colgando de una estaca.
+local function podVine(e: Emit, h: number, pods: number)
+	box(e, 0, h / 2, 0.5, 0.18, h, 0.18, "wood", 0, "stem")
+	stalk(e, 0, 0, h * 0.8, 0.2, "stem", YOUNG)
+	for i = 1, pods do
+		local side = if i % 2 == 0 then -1 else 1
+		leaf(e, side * 0.5, 0.5 + i * (h / (pods + 1)) * 0.9, 0, 0.9, 0.5, if side > 0 then "leaf" else "leaf2", YOUNG + i * 0.05)
+		box(e, side * 0.45, 0.35 + i * (h / (pods + 1)) * 0.9, -0.3, 0.22, 0.7, 0.22, "fruit", MID + i * 0.04, "fruit")
+	end
+end
+
+-- Arbusto con bayas.
+local function berryBush(e: Emit, r: number, h: number, beads: number, beadR: number)
+	stalk(e, 0, 0, h * 0.6, 0.28, "stem", YOUNG)
+	box(e, 0, h * 0.7, 0, r * 2, h * 0.45, r * 2, "leaf", YOUNG, "leaf")
+	box(e, 0, h * 1.0, 0, r * 1.4, h * 0.3, r * 1.4, "leaf2", MID, "leaf")
+	for i = 0, beads - 1 do
+		local a = (i / beads) * math.pi * 2
+		bead(e, math.cos(a) * r * 0.95, h * 0.65 + (i % 2) * 0.35, math.sin(a) * r * 0.95 - 0.15, beadR, "fruit", MID + (i % 3) * 0.12)
+	end
+end
+
+-- Árbol frutal pequeño.
+local function fruitTree(e: Emit, trunkH: number, canopyR: number, fruits: number, fruitR: number, canopyKey: string)
+	box(e, 0, trunkH / 2, 0, 0.55, trunkH, 0.55, "bark", YOUNG, "stem")
+	box(e, 0, trunkH + 0.4, 0, canopyR * 2, 0.9, canopyR * 2, canopyKey, YOUNG, "leaf")
+	box(e, 0, trunkH + 1.2, 0, canopyR * 1.5, 0.9, canopyR * 1.5, "leaf2", MID, "leaf")
+	box(e, 0, trunkH + 1.9, 0, canopyR * 0.9, 0.7, canopyR * 0.9, canopyKey, MID, "leaf")
+	for i = 0, fruits - 1 do
+		local a = (i / fruits) * math.pi * 2 + 0.4
+		bead(e, math.cos(a) * canopyR * 0.95, trunkH + 0.2 + (i % 2) * 0.7, math.sin(a) * canopyR * 0.95 - 0.1, fruitR, "fruit", MID + (i % 3) * 0.12)
+	end
+end
+
+-- Flor de disco vertical con tallo.
+local function discFlower(e: Emit, h: number, petals: number, petalR: number, petalSize: number, centerKey: string, glowing: boolean)
+	stalk(e, 0, 0, h, 0.3, "stem", YOUNG)
+	leaf(e, -0.8, h * 0.35, 0, 1.2, 0.6, "leaf", YOUNG)
+	leaf(e, 0.8, h * 0.55, 0, 1.2, 0.6, "leaf2", MID)
+	ring(e, 0, h + petalR, -0.25, petalR, petals, petalSize, petalSize, 0.28, "fruit", "fruit3", MID, if glowing then "glow" else "fruit")
+	box(e, 0, h + petalR, -0.25, petalR * 0.8, petalR * 0.8, 0.4, centerKey, MID, if glowing then "glow" else "deco")
+end
+
+-- Seta: tallo + sombrero en capas con motas.
+local function mushroom(e: Emit, stemH: number, capR: number, spots: number, glowing: boolean)
+	box(e, 0, stemH / 2, 0, capR * 0.4, stemH, capR * 0.4, "cream", YOUNG, "stem")
+	box(e, 0, stemH + 0.2, 0, capR * 2, 0.5, capR * 2, "fruit2", YOUNG, "fruit")
+	box(e, 0, stemH + 0.6, 0, capR * 1.7, 0.5, capR * 1.7, "fruit", MID, "fruit")
+	box(e, 0, stemH + 1.0, 0, capR * 1.1, 0.4, capR * 1.1, "fruit3", MID, "fruit")
+	for i = 0, spots - 1 do
+		local a = (i / spots) * math.pi * 2
+		box(e, math.cos(a) * capR * 0.7, stemH + 1.0, math.sin(a) * capR * 0.7 - 0.05, 0.3, 0.14, 0.3, "white", FULL, if glowing then "glow" else "deco")
+	end
+end
+
+-- Árbol grande/mágico con orbes.
+local function bigTree(e: Emit, trunkW: number, trunkH: number, canopyR: number, tiers: number, orbKey: string, orbs: number)
+	box(e, 0, trunkH / 2, 0, trunkW, trunkH, trunkW, "bark", YOUNG, "stem")
+	box(e, -trunkW * 0.8, 0.25, 0, trunkW * 0.7, 0.5, trunkW * 0.5, "wood2", YOUNG, "stem")
+	box(e, trunkW * 0.8, 0.25, 0, trunkW * 0.7, 0.5, trunkW * 0.5, "wood2", YOUNG, "stem")
+	for i = 1, tiers do
+		local size = canopyR * 2 * (1.05 - (i - 1) * 0.22)
+		box(e, 0, trunkH + (i - 1) * 0.8, 0, size, 0.85, size, if i % 2 == 1 then "fruit" else "fruit3", YOUNG + (i / tiers) * 0.3, "fruit")
+	end
+	for i = 0, orbs - 1 do
+		local a = (i / orbs) * math.pi * 2
+		box(e, math.cos(a) * canopyR * 0.9, trunkH - 0.5 + (i % 2) * 0.9, math.sin(a) * canopyR * 0.9, 0.4, 0.4, 0.4, orbKey, FULL, "glow")
+	end
+end
+
+-- ===== Zona 1 (nuevas) =====
+Species.Radish = function(e) rootVeg(e, 0.9, 0.9, 1.3, "leaf") end
+Species.Lettuce = function(e) leafyHead(e, 1.6, 4) end
+Species.Onion = function(e) rootVeg(e, 1.2, 1.1, 1.6, "leaf2") end
+Species.Cabbage = function(e) leafyHead(e, 2.0, 5) end
+Species.Peas = function(e) podVine(e, 3.0, 5) end
+Species.Raspberry = function(e) berryBush(e, 1.0, 1.8, 7, 0.34) end
+Species.Eggplant = function(e)
+	stalk(e, 0, 0, 1.6, 0.3, "stem", YOUNG)
+	leafRing(e, 1.0, 0.8, 1.3, YOUNG)
+	box(e, -0.35, 0.9, -0.3, 0.7, 1.3, 0.7, "fruit", YOUNG, "fruit")
+	box(e, -0.35, 1.65, -0.3, 0.5, 0.35, 0.5, "fruit2", MID, "fruit")
+	box(e, -0.35, 1.9, -0.3, 0.55, 0.2, 0.55, "leaf3", MID, "leaf")
+	box(e, 0.45, 0.8, 0.1, 0.65, 1.1, 0.65, "fruit", MID, "fruit")
+	box(e, 0.45, 1.45, 0.1, 0.45, 0.3, 0.45, "fruit2", FULL, "fruit")
+	box(e, 0.45, 1.68, 0.1, 0.5, 0.2, 0.5, "leaf3", FULL, "leaf")
+	box(e, -0.5, 1.0, -0.68, 0.14, 0.5, 0.08, "white", FULL, "deco")
+end
+
+-- ===== Zona 2 (nuevas) =====
+Species.Broccoli = function(e)
+	stalk(e, 0, 0, 1.4, 0.55, "leaf2", YOUNG)
+	leafRing(e, 0.7, 0.7, 1.1, YOUNG)
+	for _, c in ipairs({ { 0, 1.9, 0, 1.5 }, { -0.8, 1.7, 0.1, 1.0 }, { 0.8, 1.75, -0.1, 1.0 }, { 0, 2.1, 0.7, 0.9 }, { 0, 2.0, -0.7, 0.9 } }) do
+		orb(e, c[1], c[2], c[3], c[4], "fruit", MID + math.abs(c[1]) * 0.1)
+	end
+end
+Species.Lemon = function(e) fruitTree(e, 1.8, 1.4, 5, 0.55, "leaf") end
+Species.BellPepper = function(e)
+	stalk(e, 0, 0, 1.8, 0.3, "stem", YOUNG)
+	leafRing(e, 1.2, 0.7, 1.2, YOUNG)
+	for i, x in ipairs({ -0.6, 0.6, 0 }) do
+		box(e, x, 0.95 + i * 0.12, -0.15 * i, 0.8, 0.9, 0.8, "fruit", MID + i * 0.1, "fruit")
+		box(e, x, 1.5 + i * 0.12, -0.15 * i, 0.3, 0.25, 0.3, "leaf3", MID + i * 0.1, "stem")
+		box(e, x - 0.2, 0.95 + i * 0.12, -0.15 * i - 0.42, 0.18, 0.5, 0.06, "white", FULL, "deco")
+	end
+end
+Species.Cherry = function(e)
+	fruitTree(e, 2.2, 1.5, 0, 0.4, "pink")
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + 0.5
+		box(e, math.cos(a) * 1.2, 2.5, math.sin(a) * 1.2, 0.06, 0.7, 0.06, "stem2", MID, "stem")
+		bead(e, math.cos(a) * 1.2, 2.0, math.sin(a) * 1.2, 0.5, "fruit", MID + i * 0.1)
+		bead(e, math.cos(a) * 1.2 + 0.3, 2.1, math.sin(a) * 1.2, 0.46, "fruit2", MID + i * 0.1)
+	end
+end
+Species.Peach = function(e) fruitTree(e, 2.0, 1.6, 6, 0.7, "leaf") end
+Species.Mango = function(e) fruitTree(e, 2.4, 1.8, 5, 0.8, "leaf3") end
+Species.Lavender = function(e)
+	for i = -2, 2 do
+		local h = 2.6 - math.abs(i) * 0.35
+		stalk(e, i * 0.38, 0, h, 0.12, "stem", YOUNG)
+		for j = 0, 3 do
+			box(e, i * 0.38, h - 0.3 + j * 0.28, 0, 0.26, 0.26, 0.26, if j % 2 == 0 then "fruit" else "fruit3", MID + j * 0.08, "fruit")
+		end
+	end
+	leaf(e, -0.9, 0.5, 0, 1.0, 0.5, "leaf", YOUNG)
+	leaf(e, 0.9, 0.55, 0, 1.0, 0.5, "leaf2", YOUNG)
+end
+Species.Banana = function(e)
+	stalk(e, 0, 0, 3.2, 0.5, "stem", YOUNG)
+	leaf(e, -1.3, 3.3, 0, 2.2, 0.8, "leaf", YOUNG)
+	leaf(e, 1.3, 3.4, 0, 2.2, 0.8, "leaf2", YOUNG)
+	leaf(e, 0, 3.4, -1.3, 0.8, 2.2, "leaf", MID)
+	leaf(e, 0, 3.5, 1.3, 0.8, 2.2, "leaf2", MID)
+	for i = 0, 3 do
+		box(e, -0.2 + i * 0.22, 2.7 - i * 0.12, -0.65, 0.22, 0.9, 0.3, "fruit", MID + i * 0.1, "fruit")
+	end
+	box(e, 0.3, 3.1, -0.4, 0.3, 0.3, 0.3, "violet", FULL, "deco")
+end
+
+-- ===== Zona 3 (nuevas) =====
+Species.GlowShroom = function(e) mushroom(e, 1.6, 1.3, 6, true) end
+Species.FrostLily = function(e) discFlower(e, 2.4, 8, 1.0, 0.7, "white", true) end
+Species.GiantMushroom = function(e) mushroom(e, 2.6, 2.0, 8, false) end
+Species.MagicTree = function(e) bigTree(e, 0.9, 2.6, 1.9, 3, "cyan", 6) end
+Species.ThunderBloom = function(e)
+	discFlower(e, 2.8, 6, 1.1, 0.9, "gold", true)
+	box(e, -1.4, 4.4, -0.2, 0.2, 1.0, 0.16, "gold", FULL, "glow")
+	box(e, -1.2, 3.8, -0.2, 0.4, 0.2, 0.16, "gold", FULL, "glow")
+	box(e, 1.5, 4.6, -0.2, 0.2, 1.0, 0.16, "gold", FULL, "glow")
+	box(e, 1.3, 4.0, -0.2, 0.4, 0.2, 0.16, "gold", FULL, "glow")
+end
+Species.GoldenApple = function(e)
+	fruitTree(e, 2.4, 1.6, 0, 0.4, "leaf2")
+	orb(e, 0, 2.2, -0.6, 1.5, "fruit", MID)
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + 0.6
+		bead(e, math.cos(a) * 1.5, 3.3, math.sin(a) * 1.5, 0.6, "fruit", MID + i * 0.08)
+	end
+	box(e, 0, 3.15, -0.6, 0.2, 0.4, 0.1, "leaf3", FULL, "stem")
+	ringFlat(e, 0, 4.7, 0, 0.9, 4, 0.2, 0.2, 0.2, "gold", "white", FULL, "glow")
+end
+Species.AncientTree = function(e) bigTree(e, 1.3, 3.2, 2.4, 4, "gold", 7) end
+Species.SolarSunflower = function(e)
+	discFlower(e, 3.4, 12, 1.5, 0.8, "orange", true)
+	ringFlat(e, 0, 5.6, 0, 1.9, 6, 0.24, 0.24, 0.24, "gold", "white", FULL, "glow")
+end
+Species.MoltenLily = function(e)
+	discFlower(e, 2.2, 8, 1.2, 0.9, "ember", true)
+	box(e, 0, 0.25, 0, 3.0, 0.2, 3.0, "rock", YOUNG, "deco")
+	box(e, 0, 0.18, 0, 2.2, 0.16, 2.2, "orange", YOUNG, "glow")
+	box(e, -0.9, 4.1, 0.2, 0.2, 0.2, 0.2, "ember", FULL, "glow")
+	box(e, 0.8, 4.6, 0.3, 0.16, 0.16, 0.16, "orange", FULL, "glow")
+end
+Species.AmberVine = function(e)
+	stalk(e, 0, 0, 3.6, 0.36, "wood2", YOUNG)
+	for i = 0, 5 do
+		local side = if i % 2 == 0 then -1 else 1
+		box(e, side * 0.7, 0.8 + i * 0.55, 0, 1.2, 0.2, 0.4, "leaf2", YOUNG + i * 0.05, "leaf")
+		box(e, side * 1.0, 0.5 + i * 0.55, -0.2, 0.55, 0.75, 0.55, "fruit", MID + i * 0.06, "glow")
+	end
+	box(e, 0, 3.9, 0, 0.8, 0.5, 0.8, "gold", FULL, "glow")
+end
+
+Species.VoidPlant = function(e)
+	stalk(e, 0, 0, 2.2, 0.4, "black", YOUNG)
+	for i = -1, 1, 2 do
+		box(e, i * 0.6, 1.2, 0, 0.3, 0.3, 0.3, "black", YOUNG, "stem")
+		box(e, i * 1.0, 1.9, 0, 0.28, 0.9, 0.28, "indigo", MID, "stem")
+		box(e, i * 1.3, 2.6, 0, 0.24, 0.8, 0.24, "black", MID, "stem")
+		box(e, i * 1.5, 3.2, 0, 0.3, 0.3, 0.3, "violet", FULL, "glow")
+	end
+	orb(e, 0, 3.4, 0, 1.6, "fruit", MID, "fruit")
+	ringFlat(e, 0, 3.4, 0, 1.5, 8, 0.22, 0.22, 0.22, "violet", "indigo", FULL, "glow")
+	box(e, -0.25, 3.5, -0.85, 0.2, 0.2, 0.1, "white", FULL, "glow")
+	box(e, 0.25, 3.5, -0.85, 0.2, 0.2, 0.1, "white", FULL, "glow")
+end
+Species.PhoenixTree = function(e)
+	bigTree(e, 1.0, 2.8, 1.7, 3, "ember", 5)
+	for i = 1, 3 do
+		box(e, -1.9 - i * 0.5, 3.4 + i * 0.55, 0, 1.2, 0.34, 0.2, if i % 2 == 0 then "fruit3" else "ember", FULL, "glow")
+		box(e, 1.9 + i * 0.5, 3.4 + i * 0.55, 0, 1.2, 0.34, 0.2, if i % 2 == 0 then "fruit3" else "ember", FULL, "glow")
+	end
+	box(e, 0, 5.4, 0, 0.5, 0.9, 0.4, "ember", FULL, "glow")
+end
+Species.StarBlossom = function(e)
+	stalk(e, 0, 0, 3.0, 0.36, "stem", YOUNG)
+	leaf(e, -1.0, 1.2, 0, 1.4, 0.7, "leaf3", YOUNG)
+	leaf(e, 1.0, 1.8, 0, 1.4, 0.7, "leaf3", YOUNG)
+	ring(e, 0, 4.3, -0.3, 1.3, 5, 0.9, 0.9, 0.3, "fruit", "fruit3", MID, "fruit", math.pi / 2)
+	ring(e, 0, 4.3, -0.3, 0.55, 5, 0.5, 0.5, 0.34, "gold", "white", MID, "glow", math.pi / 2 + math.pi / 5)
+	box(e, 0, 4.3, -0.3, 0.8, 0.8, 0.46, "white", FULL, "glow")
+	box(e, -2.0, 5.6, 0.3, 0.3, 0.3, 0.2, "gold", FULL, "glow")
+	box(e, 2.1, 5.1, 0.3, 0.24, 0.24, 0.2, "white", FULL, "glow")
+	box(e, 1.4, 6.3, 0.2, 0.2, 0.2, 0.2, "gold", FULL, "glow")
+end
+Species.DreamWillow = function(e)
+	box(e, 0, 1.6, 0, 0.9, 3.2, 0.9, "bark", YOUNG, "stem")
+	box(e, 0, 3.4, 0, 3.8, 0.9, 3.8, "fruit", YOUNG, "fruit")
+	box(e, 0, 4.2, 0, 2.6, 0.8, 2.6, "fruit3", MID, "fruit")
+	for i = 0, 7 do
+		local a = (i / 8) * math.pi * 2
+		local len = 2.4 - (i % 3) * 0.5
+		box(e, math.cos(a) * 1.7, 3.0 - len / 2, math.sin(a) * 1.7, 0.18, len, 0.18, if i % 2 == 0 then "cyan" else "pink", MID + (i % 3) * 0.1, "glow")
+	end
+	box(e, 0, 5.0, 0, 0.5, 0.5, 0.5, "white", FULL, "glow")
+end
+Species.ObsidianRose = function(e)
+	stalk(e, 0, 0, 2.4, 0.3, "black", YOUNG)
+	box(e, -0.5, 0.9, -0.15, 0.2, 0.2, 0.3, "black", YOUNG, "deco")
+	box(e, 0.5, 1.5, -0.15, 0.2, 0.2, 0.3, "black", MID, "deco")
+	leaf(e, -0.9, 1.3, 0, 1.2, 0.6, "leaf3", YOUNG)
+	box(e, 0, 2.7, 0, 2.0, 0.5, 2.0, "black", YOUNG, "fruit")
+	box(e, 0, 3.1, 0, 1.6, 0.5, 1.6, "fruit", MID, "fruit")
+	box(e, 0, 3.5, 0, 1.2, 0.5, 1.2, "black", MID, "fruit")
+	box(e, 0, 3.9, 0, 0.8, 0.5, 0.8, "fruit", FULL, "fruit")
+	ringFlat(e, 0, 3.0, 0, 1.2, 8, 0.2, 0.2, 0.2, "rose", "violet", FULL, "glow")
+	box(e, 0, 4.3, 0, 0.3, 0.3, 0.3, "white", FULL, "glow")
+end
+
+Species.MoonLotus = function(e)
+	box(e, 0, 0.18, 0, 3.8, 0.2, 3.8, "leaf3", YOUNG, "leaf")
+	ringFlat(e, 0, 1.0, 0, 1.2, 8, 0.7, 1.5, 0.4, "white", "fruit", MID, "fruit")
+	ringFlat(e, 0, 1.4, 0, 0.7, 4, 0.5, 1.4, 0.4, "fruit3", "white", MID, "fruit", math.pi / 4)
+	box(e, 0, 0.9, 0, 0.7, 1.3, 0.7, "gold", MID, "glow")
+	orb(e, 0, 3.6, 0, 1.8, "cream", FULL, "glow")
+	ring(e, 0, 3.6, 0.1, 1.5, 12, 0.18, 0.18, 0.18, "white", "cyan", FULL, "glow")
+end
+Species.HeavenSeed = function(e)
+	orb(e, 0, 1.4, 0, 1.8, "fruit", YOUNG, "fruit")
+	orb(e, 0, 1.4, -0.3, 0.9, "gold", MID, "glow")
+	for i = 1, 3 do
+		box(e, -1.3 - i * 0.55, 1.6 + i * 0.4, 0, 1.0, 0.3, 0.18, "white", MID + i * 0.1, "glow")
+		box(e, 1.3 + i * 0.55, 1.6 + i * 0.4, 0, 1.0, 0.3, 0.18, "white", MID + i * 0.1, "glow")
+	end
+	ring(e, 0, 3.7, 0, 0.9, 8, 0.24, 0.24, 0.24, "gold", "white", FULL, "glow")
+	box(e, 0, 2.7, 0, 0.18, 0.7, 0.18, "leaf2", FULL, "stem")
+end
+Species.BlackLotus = function(e)
+	box(e, 0, 0.18, 0, 4.0, 0.2, 4.0, "black", YOUNG, "leaf")
+	ringFlat(e, 0, 1.0, 0, 1.3, 8, 0.75, 1.7, 0.4, "black", "indigo", MID, "fruit")
+	ringFlat(e, 0, 1.5, 0, 0.75, 4, 0.55, 1.6, 0.4, "fruit", "black", MID, "fruit", math.pi / 4)
+	orb(e, 0, 1.2, 0, 0.9, "rose", MID, "glow")
+	for i = 0, 5 do
+		local a = (i / 6) * math.pi * 2
+		box(e, math.cos(a) * 1.9, 2.0 + (i % 3) * 0.7, math.sin(a) * 1.9, 0.22, 0.22, 0.22, if i % 2 == 0 then "violet" else "rose", FULL, "glow")
+	end
+end
+Species.WorldTree = function(e)
+	bigTree(e, 1.7, 3.6, 3.0, 4, "cyan", 8)
+	box(e, -1.9, 0.3, -0.6, 1.2, 0.6, 0.6, "wood2", YOUNG, "stem")
+	box(e, 1.9, 0.3, 0.6, 1.2, 0.6, 0.6, "wood2", YOUNG, "stem")
+	box(e, 0, 0.3, 1.8, 0.6, 0.6, 1.2, "wood2", YOUNG, "stem")
+	ring(e, 0, 7.2, 0, 1.6, 10, 0.26, 0.26, 0.26, "gold", "white", FULL, "glow")
+	box(e, 0, 7.2, 0, 0.9, 0.9, 0.9, "white", FULL, "glow")
+	for i = 0, 3 do
+		local a = i * math.pi / 2 + 0.3
+		box(e, math.cos(a) * 2.7, 2.6, math.sin(a) * 2.7, 0.18, 1.8, 0.18, "mint", FULL, "glow")
+	end
+end
+Species.GlitchPlant = function(e)
+	stalk(e, 0, 0, 2.0, 0.3, "cyan", YOUNG)
+	stalk(e, 0.35, 0, 1.4, 0.3, "rose", YOUNG)
+	box(e, -0.6, 2.2, 0, 0.7, 0.7, 0.7, "fruit", YOUNG, "fruit")
+	box(e, 0.5, 2.7, -0.2, 0.9, 0.5, 0.5, "cyan", MID, "glow")
+	box(e, -0.1, 3.3, 0.1, 0.6, 0.6, 0.6, "rose", MID, "glow")
+	box(e, 0.9, 3.6, 0, 0.4, 0.4, 0.4, "white", MID, "glow")
+	box(e, -1.0, 3.1, -0.3, 0.5, 0.3, 0.5, "black", FULL, "deco")
+	box(e, 0.1, 4.1, -0.1, 1.2, 0.3, 0.3, "fruit3", FULL, "glow")
+	box(e, -0.7, 4.5, 0.2, 0.3, 0.9, 0.3, "cyan", FULL, "glow")
+	box(e, 0.8, 4.9, -0.2, 0.5, 0.5, 0.5, "rose", FULL, "glow")
+	box(e, -1.4, 2.0, 0.4, 0.4, 0.4, 0.4, "white", FULL, "glow")
+	box(e, 1.5, 2.0, -0.4, 0.3, 0.3, 0.3, "black", FULL, "glow")
+end
+
 PlantBlueprints.Species = Species
 
 return PlantBlueprints

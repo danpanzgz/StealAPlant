@@ -1,207 +1,217 @@
-# Steal a Plant — Estructura del proyecto (v0.5)
+# Steal a Plant — Estructura del proyecto (v1.1)
 
 Simulador multiplayer de cultivo, colección, mutaciones y robo entre
 jugadores. Clasificación de madurez: **MinimalViolence (Occasional/Mild)** —
 todo el conflicto se resuelve mediante alarmas, persecuciones, bloqueos
 temporales y efectos cómicos, nunca violencia gráfica.
 
-Este documento describe la arquitectura y el estado actual. El proyecto
-está pensado para sincronizarse a Roblox Studio con **Rojo**
-(`rojo serve` / `rojo build`) usando `default.project.json`.
+El proyecto se sincroniza con Roblox Studio mediante **Rojo**
+(`rojo serve` / `rojo build`) usando `default.project.json`; la versión de
+Rojo está fijada en `rokit.toml` (`rokit install`).
+
+> **Cómo saber qué versión corre en tu Studio:** el HUD muestra
+> `Steal a Plant vX.Y` abajo a la izquierda (`GameConfig.Version`). Si no
+> coincide con este README, Studio está sincronizando otra rama.
 
 ## Filosofía de arquitectura
 
-1. **Config-driven**: todo el balance del juego (precios, tiempos de
-   crecimiento, rarezas, mutaciones, niveles de jardín) vive en
-   `ReplicatedStorage/Shared/Config/*.lua`. Nunca hay números "mágicos"
-   sueltos en la lógica de los Services.
+1. **Config-driven**: balance, precios, tiempos, rarezas, mutaciones,
+   estilos de valla, sonidos y eventos viven en
+   `ReplicatedStorage/Shared/Config/*.lua`. No hay números mágicos en la
+   lógica.
 2. **Servidor autoritativo**: el cliente nunca concede Cash, plantas,
-   mutaciones ni resultados de robo. Todo pasa por un Service de servidor
-   que valida antes de aplicar cualquier cambio.
-3. **Un Service, una responsabilidad**: `EconomyService` es la única
-   puerta para tocar Cash, `DataService` es la única puerta para tocar
-   DataStore, etc. Esto evita condiciones de carrera y hace el código
-   testeable.
-4. **Remotos centralizados**: todos los RemoteEvents/RemoteFunctions se
-   declaran una vez en `Net.lua` y se crean al arrancar el servidor
-   (`RemoteBootstrap`). Nada se crea "sobre la marcha".
+   mutaciones, compras ni resultados de robo. Cada remoto valida tipos y
+   tiene límite de frecuencia por jugador (`RemoteHandlers`).
+3. **Un Service, una responsabilidad**: `EconomyService` es la única puerta
+   al Cash (rechaza NaN/infinito) y `DataService` la única al DataStore.
+4. **Remotos centralizados**: se declaran en `Net.lua` y se crean al arrancar
+   (`RemoteBootstrap`).
+5. **Cliente aislado**: cada controlador se inicia con `safeInit` (pcall), de
+   modo que un error en uno no rompe el resto de la interfaz.
 
-## Estructura de carpetas
+## Estructura
 
 ```
 StealAPlant/
-├── default.project.json          # Config de Rojo
-├── src/
-│   ├── ReplicatedStorage/
-│   │   └── Shared/
-│   │       ├── Config/
-│   │       │   ├── GameConfig.lua          # Ajustes globales
-│   │       │   ├── RarityConfig.lua        # 7 rarezas: Common → Celestial
-│   │       │   ├── MutationConfig.lua      # Gold/Diamond para nuevas flores
-│   │       │   ├── ZoneConfig.lua          # Zonas con requisito de desbloqueo
-│   │       │   ├── PlantConfig.lua         # Catálogo de semillas y especies
-│   │       │   ├── PlantInstanceConfig.lua # Tamaños y cupo de flores colocadas
-│   │       │   ├── ShopConfig.lua          # Packs, gear y peso de stock
-│   │       │   ├── PetConfig.lua           # Compañero mascota
-│   │       │   └── GardenConfig.lua        # Niveles de jardín
-│   │       └── Modules/
-│   │           ├── Signal.lua          # Pub/sub interno entre Services
-│   │           └── Net.lua             # Wrapper único de Remotes
-│   ├── ServerScriptService/
-│   │   └── Server/
-│   │       ├── Remotes/
-│   │       │   └── RemoteBootstrap.lua # Crea todos los remotos al iniciar
-│   │       └── Services/                  # Servicios autoritativos del servidor
-│   └── StarterPlayer/
-│       └── StarterPlayerScripts/
-│           └── Client/                 # HUD, tienda, mochila y controles
+├── default.project.json
+├── rokit.toml
+└── src/
+    ├── ReplicatedStorage/
+    │   ├── Shared/Config/      # Balance y contenido (ver tabla)
+    │   ├── Shared/Modules/     # Net, Signal, PlantBlueprints, PlantModels,
+    │   │                       # MutationUtil, MutationVisuals
+    │   └── InputController/    # Acciones de entrada (slap, mochila...)
+    ├── ServerScriptService/Server/
+    │   ├── Main.server.lua     # Arranque, jugadores y red de seguridad
+    │   ├── Remotes/RemoteBootstrap.lua
+    │   └── Services/           # Lógica autoritativa
+    └── StarterPlayer/StarterPlayerScripts/Client/
+        ├── Main.client.lua     # Arranque con safeInit
+        ├── Controllers/        # HUD, tienda, mochila, audio, efectos, cielo...
+        ├── Modules/FarmArt.lua # Iconos pixelados (cultivos, huevos, mascotas)
+        └── UI.lua              # Helpers de interfaz
 ```
 
-## Estado actual (v0.5 — Mascotas cúbicas y mundo blocky)
+### Configs (`Shared/Config`)
+| Archivo | Contenido |
+|---|---|
+| `GameConfig` | Ajustes globales, versión, DataStore, robo, rebirth, offline |
+| `PlantConfig` / `PlantInstanceConfig` | Catálogo de **57 especies** (9 Common, 10 Uncommon, 10 Rare, 9 Epic, 7 Legendary, 6 Mythic, 6 Celestial);  tamaños (Normal/Big/Giant), peso, nombre mostrado y cupo de flores colocadas |
+| `MutationConfig` | Efectos: Wet, Frozen, Shiny, Gold, Rainbow, Diamond (probabilidad y multiplicador) |
+| `RarityConfig` | 7 rarezas, Common → Celestial |
+| `PetConfig` | 35 mascotas (5 por rareza), bonus por rareza y animal de cada una |
+| `GardenConfig` | Niveles, layout de 12 jardines y **6 estilos de valla por Rebirth** |
+| `EventConfig` | RainShower (crecimiento x1.2 + Wet) y GoldRush (venta x1.5) |
+| `SoundConfig` | Efectos, ambiente por evento y música (ids vacíos = silencio) |
+| `SeasonConfig` | Pase de Temporada: 30 niveles, XP por acción, premios free/premium, ciclo de 30 días |
+| `ShopConfig`, `DefenseConfig`, `QuestConfig`, `DailyRewardConfig`, `ZoneConfig`, `MonetizationConfig` | Tienda, defensas, misiones, recompensa diaria, zonas, pases y productos |
 
-Servidor (`Services/`): `DataService`, `EconomyService`, `GardenService`,
-`InventoryService`, `PlantService`, `ShopService`, `StealService`,
-`DefenseService`, `QuestService`, `DailyRewardService`, `EventService`
-(Rain Shower y Gold Rush), `LeaderboardService`, `MonetizationService`
-(Game Passes + `ProcessReceipt` idempotente), `MapBuilder` (mapa por código),
-`RemoteHandlers` (única entrada de remotos, con rate limit),
-`OfflineEarningsService` (bónus por desconexión) y `RebirthService`
-(reinicio de progresión con bonificación persistente), además de
-`PetService` para crear, equipar y acompañar mascotas cúbicas.
+### Services (servidor)
+`DataService` (session locking + `UpdateAsync`), `EconomyService`,
+`GardenService` (jardines, vallas, carteles), `InventoryService`,
+`PlantService` (crecimiento, mutaciones, flores colocadas),
+`ShopService` + `StockService`, `StealService`, `SlapService`,
+`DefenseService`, `QuestService`, `DailyRewardService`, `EventService`,
+`LeaderboardService`, `SeasonService` (XP, niveles y premios), `MonetizationService` (`ProcessReceipt` idempotente),
+`OfflineEarningsService`, `RebirthService`, `PetService`, `ZoneService`,
+`MapBuilder` (mapa y atmósfera por código) y `RemoteHandlers`.
 
-Cliente (`Client/`): `HUDController`, `ShopController`, `InventoryController`,
-`GardenController`, `QuestController`, `LeaderboardController`,
-`StoreController`, `PlantController`, `SlapController`, `PromptController` y `UI.lua`.
-`FarmArt.lua` genera iconos pixelados de cultivos, packs de semillas, huevos,
-mascotas y herramientas para la tienda y el inventario.
+### Controladores (cliente)
+`HUDController`, `ShopController`, `InventoryController`, `GardenController`,
+`QuestController`, `SeasonController`, `LeaderboardController`, `StoreController`,
+`PlantController`, `SlapController`, `StealController`, `PromptController`,
+`ProgressController`, `IndexController` (Plant Index), `AudioController`,
+`EffectsController` (animaciones, clima de eventos) y `SkyController`
+(sol cuadrado, nubes voxel y luciérnagas).
 
-Nuevos configs: `PlantInstanceConfig`, `ShopConfig`, `DefenseConfig`, `QuestConfig`, `EventConfig`,
-`DailyRewardConfig`, `MonetizationConfig`, además del catálogo completo de
-plantas y del balance de rebirth/offline earnings en `GameConfig.lua`.
+## Datos y seguridad
+- **Session locking**: cada perfil queda bloqueado por el servidor que lo
+  usa. Un segundo servidor espera unos segundos y, si sigue bloqueado,
+  expulsa al jugador con un mensaje. Un servidor que pierde el bloqueo deja
+  de guardar. El bloqueo caduca a los 6 min si el servidor cae.
+- Guardado con reintentos y backoff, autosave, `BindToClose` y guardado
+  final que libera el bloqueo. Un perfil que no pudo cargarse es temporal y
+  **nunca** sobrescribe datos reales.
+- Perfiles antiguos (sin formato) se migran solos; se sanean Cash, nivel y
+  rebirths imposibles al cargar.
+- Compras: `ProcessReceipt` guarda antes de confirmar y es idempotente por
+  `PurchaseId`.
+- Red de seguridad del mapa: muros gruesos, seto perimetral, suelo invisible
+  bajo el mapa y teletransporte automático si alguien queda fuera de límites.
+
+## Jugabilidad
 
 ### Controles
-- Plantar: equipa semillas y haz clic/toca cualquier punto de tierra dentro
-  de tu jardín; el servidor comprueba los límites y evita solapar cultivos.
-  Cosechar: **E** o botón táctil sobre una parcela madura.
-- Robar: mantén **F** o botón táctil en una planta madura ajena.
-- Abrir la mochila: tecla **º** (tecla física Backquote) o botón **Mochila**.
-  La mochila predeterminada de Roblox está desactivada para que esa tecla no
-  abra dos inventarios a la vez.
-- Mando: **Y** abre la mochila, **R2** usa el palo, **A** confirma una
-  colocación y **B** la cancela. En móvil se usan los botones táctiles del HUD.
-- Palo: botón **SLAP**, tecla **G** o **R2**. Empuja sin causar daño; el
-  impulso sube con cada renacimiento.
-- La mochila permite buscar en cada sección y, en Plantas, filtrar por rareza
-  o mutación y ordenar por peso, rareza, mutación o valor.
-- Botones de acción: Tienda · Mochila · Jardín · Tareas · Top · Pases · Palo.
-- Los botones de la interfaz se adaptan a móvil, tablet y escritorio; también
-  admiten navegación por selección para mando.
-- La interfaz usa paneles cuadrados, bordes pixelados y colores de madera,
-  tierra, pergamino y cultivos.
-- Los controles se definen en `ReplicatedStorage/Inputs` con el Input Action
-  System. En Studio habilita `Workspace > Behavior >
-  PlayerScriptsUseInputActionSystem = Enabled`; usa `Window > Input > Input
-  Action Manager` para revisar o cambiar los bindings.
+- **Plantar**: equipa semillas y haz clic/toca la tierra de tu jardín.
+- **Colocar una flor de la mochila**: elígela en la mochila y toca/clic en el
+  suelo de tu jardín, o usa **📍 Colocar aquí** (delante de ti). **Cancelar**
+  con el botón, **Esc/X**. Mando: **A** coloca delante de ti. Cupo base: 6,
+  más 2 por Rebirth.
+- **Cosechar**: **E** o botón táctil sobre una parcela madura.
+- **Robar**: mantén **F** o el botón táctil en una planta madura ajena.
+- **Mochila**: tecla **º** (Backquote) o botón. Mando: **Y**.
+- **Palo (SLAP)**: botón, **G** o **R2**; empuja sin daño.
+- Botones: Tienda · Mochila · Jardín · Tareas · Top · Pases · Palo · 📖 Índice
+  · 🔊 Audio (3 estados).
+- La interfaz es pixel-art con degradados suaves y animación al pulsar.
+  Los controles de teclado/mando se definen con el Input Action System
+  (`Workspace > Behavior > PlayerScriptsUseInputActionSystem = Enabled`).
 
-### Mapa
-El mapa se genera con una estética blocky: plaza central con fuente y tres
-puestos atendidos por granjeros distintos (semillas, herramientas y huevos),
-bancos, faroles y parterres con flores cúbicas; camino de adoquines con
-pequeñas islas florales; pradera con variaciones de césped y tierra; y un
-estanque escalonado rodeado de flores y un pequeño bosquecillo. Hay cuatro
-tipos de árboles con copas cúbicas (roble, pino, cerezo y abedul). Los jardines
-son patios vallados, con parcelas y jardineras de entrada. `default.project.json`
-configura 13 visitantes para los nuevos builds. El servidor mantiene 12 plazas
-sociales personalizadas. En un place ya abierto o publicado, ajusta la capacidad
-de visitantes a 13 en Basic Settings y conserva 12 en Server Settings → Custom
-Social Slots; guarda/publica el place. Estos ajustes son de solo lectura para
-scripts.
+### Mapa (12 jugadores)
+Dos filas de 6 jardines frente a frente con una calle y plaza central
+(fuente, puestos de semillas/herramientas/huevos, faroles, estanque, bosque).
+Cada puerta lleva un **cartel "Jardín de <nombre>"** legible desde ambos
+lados con el Rebirth del dueño. Los jardines son patios con parcelas,
+incubadora (en el pasillo lateral), jardineras y suelo de tierra sobre el
+césped.
 
-### Features nuevas añadidas
-- `PlantConfig.GetCatalog()`: índice de especies por zona con nombre,
-  rareza, precio y tiempo de crecimiento.
-- `RebirthService`: reinicio de progreso, coste escalonado y bonificación por
-  descargar la energía del jugador.
-- `OfflineEarningsService`: recompensa por minutos desconectados según plantas
-  maduras disponibles en el jardín.
-- Plaza blocky regenerada sin duplicar el mapa anterior, con base segura,
-  parches de terreno y árboles cúbicos variados.
+**Vallas por Rebirth** (se actualizan al renacer): rústica → blanca → muro de
+piedra → hierro forjado → cristal → real dorada (las dos últimas con luz y
+destellos).
+
+**Atardecer**: iluminación de puesta de sol con atmósfera, bloom y rayos; sol
+cuadrado en capas y nubes voxel rosas (`SkyController`), colinas de fondo.
+
+### Plantas, mutaciones y eventos
+- Las plantas se dibujan con voxels (`PlantBlueprints` + `PlantModels`) por
+  fases (brote → joven → madura) y escalan con el tamaño: Normal, **Big** y
+  **Giant** (mucho más grandes).
+- **Efectos apilables sin límite**: cada efecto (Wet, Frozen, Shiny, Gold,
+  Rainbow, Diamond) se tira por separado; el valor es el producto de todos.
+  El nombre muestra todo: `Giant Apple · Wet · Gold · 3.20 kg`.
+- **Lluvia**: crecimiento x1.2 y el efecto **Wet** (solo posible con lluvia,
+  se ve como gotas cayendo de la planta); lluvia visual y tinte frío en el
+  cliente. **Gold Rush**: venta x1.5 con chispas doradas.
+- **Mascotas**: huevos por rareza, bonus de Cash/crecimiento/suerte según la
+  rareza de la mascota equipada. Al abrir un huevo: silueta → revelado del
+  animal con su emoji y nombre.
+- **Plant Index**: la primera vez que consigues una especie se anima y se
+  registra en el índice (`IndexController`).
+
+### Pase de Temporada
+Temporadas de 30 días calculadas con `os.time()` (sin mantenimiento): al
+cambiar, el XP y los premios reclamados se reinician. 30 niveles con **pista
+gratis** y **pista premium** (Game Pass `SeasonPass`, 449 R$). El XP sale de
+jugar (plantar 4, cosechar 12, robar 50, defender 40, misión 60, recompensa
+diaria 40, abrir huevo 30). Se puede comprar +1 / +5 niveles (Developer
+Products `SeasonSkip` / `SeasonSkip5`). Los premios premium ya ganados se
+pueden reclamar al comprar el pase más tarde. Servidor autoritativo: el
+cliente solo pide `ClaimSeasonReward(nivel, pista)`.
 
 ### Ciclo de colección y tienda
-- Las semillas se consumen al plantar. El jardín crea parcelas adicionales
-  cuando las existentes están ocupadas, por lo que no hay un límite fijo de
-  cultivos simultáneos.
-- Al reclamar un cultivo maduro se obtiene una flor individual persistente
-  con rareza, peso, tamaño (Normal/Large/Giant), mutación (ninguna/Gold/
-  Diamond), valor de venta e ingreso por minuto.
-- Las parcelas guardan la hora de siembra: su progreso usa tiempo real y
-  continúa mientras el jugador está desconectado. Las plantas muestran
-  siluetas y frutos distintos por especie, con fases de brote, crecimiento
-  y madurez. Las flores maduras emiten polen; Gold y Diamond añaden brillo,
-  aura, partículas y luz propios.
-- Las flores pueden quedarse en la colección, venderse, regalarse a otro
-  jugador o colocarse en el jardín. Solo las colocadas ocupan cupo y generan
-  Cash; cada renacimiento aumenta ese cupo. No existe trading.
-- Los ingresos offline se calculan sobre las flores colocadas, se limitan a
-  3 horas y tienen un tope de $100,000 por ausencia. Los pases propuestos
-  amplían el máximo; las plantas que estaban creciendo también avanzan con
-  el tiempo real y pueden estar maduras al volver.
-- El inventario separa Seeds, Plants, Gear y Pets. La colección de flores se
-  puede ordenar por peso, rareza, mutación o valor.
-- La tienda y el inventario comparten iconos pixelados de granja para distinguir
-  semillas, herramientas, huevos, mascotas y cultivos.
-- Los jugadores nuevos reciben un pack Common gratuito. Incluye 3–4 semillas
-  Common y 1–2 Uncommon; puede añadir Rare (25%), Legendary (5%) y Mythic
-  (0,99%). Los packs Uncommon, Rare, Epic, Legendary, Mythic y Celestial
-  tienen recetas acordes a su rareza.
-- El stock de packs y gear se genera de forma determinista para un ciclo
-  compartido de 5 minutos. El límite por artículo y jugador es aleatorio
-  (5–15) y se registra con MemoryStore para evitar obtener compras extra al
-  cambiar de servidor.
-- Gear disponible: regadera de un uso (crecimiento 5× durante 20 segundos),
-  aspersor (crecimiento 1,5× para cultivos nuevos), tótem de mutación y tótem
-  de tamaño. Los efectos de los tótems se aplican al plantar.
-- Hay un huevo por rareza (Common a Celestial); cada uno puede incubar
-  cualquiera de sus cinco mascotas posibles con la misma probabilidad.
-  Las mascotas son criaturas cúbicas construidas por código y se pueden
-  equipar para que sigan al jugador. Rare, Epic, Legendary, Mythic y
-  Celestial añaden brillos, partículas y luz según su rareza.
-- Los perfiles antiguos que tenían el gato se migran a la mascota inicial
-  cúbica; el sistema ya no requiere modelos externos en `ReplicatedStorage`.
-- Los huevos comparten el stock y el límite personal de compra con los packs
-  de semillas y el gear.
-- Los puestos de semillas, herramientas y huevos abren categorías separadas
-  del stock global.
-- El incubador cúbico de cada jardín se desbloquea una sola vez por $1,000.
-  Los huevos no se pueden incubar hasta comprarlo.
-- Las flores pueden colocarse libremente dentro del patio vallado. Para el
-  robo hay que llevar la flor hasta la base; el portador corre un 10% más
-  despacio y no puede plantar, cosechar, usar gear ni incubar durante el
-  trayecto. Si el trayecto se interrumpe, la flor vuelve a su dueño cuando
-  sigue en el servidor.
-- El domo del jardín protege durante 45 segundos, impide los robos y expulsa
-  a los visitantes; tiene 180 segundos de recarga.
-- El evento RainShower muestra lluvia local sincronizada con el evento global.
-- El stock compartido y los límites entre servidores requieren acceso a
-  MemoryStore; activa *Studio Access to API Services* para probarlo en Studio.
+- Las semillas se consumen al plantar; el jardín crea parcelas adicionales
+  cuando hacen falta. Cosechar da una flor individual persistente (rareza,
+  peso, tamaño, efectos, valor e ingreso por minuto).
+- Las flores se pueden conservar, vender, regalar (semillas y flores; sin
+  trading) o colocar en el jardín. Solo las colocadas generan Cash.
+- Offline: se calcula sobre las flores colocadas, máx. 3 h y $100,000.
+- Stock compartido de 5 min (packs, gear y huevos) con límite por jugador y
+  MemoryStore entre servidores. Gear: regadera, aspersor, tótem de mutación y
+  de tamaño.
+- Robo: hay que llevar la flor hasta tu base; el portador va más lento. Si
+  te pillan vuelves a tu jardín con efecto cómico. Escudo al entrar y tras
+  ser robado; domo de jardín (45 s, 180 s de recarga).
+- Rebirth: reinicia progresión con bonificación persistente, más cupo de
+  flores y valla nueva.
 
-### Pases propuestos
-Los precios sugeridos en `MonetizationConfig.lua` son: x2 Cash (79 Robux),
-Lucky Mutation (199), Pulgar verde —crecimiento 25% más rápido— (99) y
-Granjero incansable —hasta 6 horas offline y 25% más de ingresos offline—
-(149). El límite de dinero offline sigue siendo $100,000. Los IDs permanecen
-en `0` hasta crear cada pase en Creator Hub; Roblox requiere esos IDs para
-habilitar las compras.
+## Audio
+`SoundConfig.lua` define clic, menú, plantar/colocar, huevos, eventos,
+ambiente y música. Los ids por defecto son archivos internos de Roblox que
+pueden no existir en tu versión; los **ambientes y la música están vacíos**.
+Sube tus sonidos a Roblox y pega los ids. Al jugar, la consola avisa de los
+ids que fallan (`[Audio] No carga el sonido ...`).
+
+### Monetización (Robux)
+Inspirada en lo que funciona en Grow a Garden / Steal a Brainrot: ofertas de
+bienvenida de una sola compra, boosts baratos y repetibles, paquetes de
+semillas/huevos y pases de comodidad. Nada bloquea el juego gratuito. Todo se
+concede en servidor (`MonetizationService`, `ProcessReceipt` idempotente) y
+los precios son puntos de partida a ajustar con datos reales. Los IDs están en
+`0` hasta crearlos en Creator Hub y pegarlos en `MonetizationConfig.lua`.
+
+| Tipo | Contenido |
+|---|---|
+| **Ofertas (1 vez)** | 🎁 Starter Pack 149 R$ (25k Cash, 3 packs Rare, 1 Epic, huevo Rare, 5 regaderas, 30 min x2 Cash) · 👑 Pro Pack 399 R$ |
+| **Boosts** | x2 Cash / Crecimiento 19 R$ · x2 Suerte 49 R$ (10 min, se acumulan) · 🚀 Super Boost 30 min 99 R$ |
+| **Utilidades** | ⏩ Crecimiento instantáneo 29 R$ · 🛡️ Escudo 30 min 39 R$ |
+| **Paquetes** | Pack Epic x3 79 R$ · Huevos Rare x3 59 R$ · Pack Legendary x2 199 R$ |
+| **Cash** | 19 / 49 / 149 / 399 R$ (10k / 60k / 250k / 1M) |
+| **Temporada** | 🏆 Pase 449 R$ (pista premium) · +1 nivel 39 R$ · +5 niveles 149 R$ |
+| **Pases** | x2 Cash 79 · VIP 299 (+15% Cash, pack Rare diario) · +3 huecos de flores 149 · Pulgar verde 99 · Granjero incansable 149 · Lucky Mutation 199 · Velocidad extra 149 · Maestro del escudo 249 |
+
+Los boosts se guardan como hora de fin en el perfil; la tienda muestra los
+activos y un aviso recomienda la oferta de bienvenida tras 2,5 min de juego.
 
 ### Antes de publicar
-1. Crea Game Passes y Developer Products en el Creator Hub y pega los IDs
-   en `MonetizationConfig.lua` (con `id = 0` los botones avisan de que falta).
+1. Crea Game Passes y Developer Products en Creator Hub y pega los IDs en
+   `MonetizationConfig.lua`.
 2. Activa *Game Settings → Security → Enable Studio Access to API Services*
-   para probar DataStore y el leaderboard global en Studio.
-3. No se necesitan modelos externos para las mascotas: `PetService` las crea
-   usando partes cúbicas y efectos de Roblox.
+   para probar DataStore, MemoryStore y el leaderboard en Studio.
+3. Sube tus sonidos y música y pega los ids en `SoundConfig.lua`.
+4. Ajusta la capacidad del place a 13 jugadores y 12 en Custom Social Slots
+   (los scripts no pueden cambiarlo).
 
-### Validación en Studio
+### Validación en Studio (histórico, v0.5)
 La compilación de Rojo pasó y el Play smoke test comprobó el suelo seguro, el
 jardín inicial, el HUD y la apertura de la tienda. Se revisó el HUD en iPhone
 17 Pro vertical, iPad Pro M5 horizontal, portátil y el viewport de Xbox One.
@@ -213,6 +223,9 @@ dos IDs de recursos no aprobados o incompatibles y un `Workspace.Script`
 externo que imprime `Hello world!`; no son errores de carga del juego.
 
 ### Pendiente
-Sonidos, tutorial guiado con pasos bloqueantes, más defensas y una prueba con
-mando físico siguen pendientes. El juego no incluye trading; los regalos se
-limitan a semillas y flores.
+- Probar todo en Studio y en móvil de gama baja (las vallas de piedra,
+  hierro, cristal y oro añaden varios cientos de piezas por jardín).
+- Sonidos y música propios; tutorial guiado con pasos bloqueantes; más
+  defensas; prueba con mando físico.
+- Nombres de las vallas/efectos y precios de pases/productos por afinar con
+  datos reales. Sin trading (los regalos se limitan a semillas y flores).
