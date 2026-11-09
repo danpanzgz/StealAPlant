@@ -1,4 +1,4 @@
-# Steal a Plant — Estructura del proyecto (v0.9)
+# Steal a Plant — Estructura del proyecto (v1.0)
 
 Simulador multiplayer de cultivo, colección, mutaciones y robo entre
 jugadores. Clasificación de madurez: **MinimalViolence (Occasional/Mild)** —
@@ -170,10 +170,25 @@ pueden no existir en tu versión; los **ambientes y la música están vacíos**.
 Sube tus sonidos a Roblox y pega los ids. Al jugar, la consola avisa de los
 ids que fallan (`[Audio] No carga el sonido ...`).
 
-### Pases propuestos
-x2 Cash (79 Robux), Lucky Mutation (199), Pulgar verde —crecimiento 25% más
-rápido— (99) y Granjero incansable —hasta 6 h offline y 25% más de ingresos
-offline— (149). Los IDs están en `0` hasta crearlos en Creator Hub.
+### Monetización (Robux)
+Inspirada en lo que funciona en Grow a Garden / Steal a Brainrot: ofertas de
+bienvenida de una sola compra, boosts baratos y repetibles, paquetes de
+semillas/huevos y pases de comodidad. Nada bloquea el juego gratuito. Todo se
+concede en servidor (`MonetizationService`, `ProcessReceipt` idempotente) y
+los precios son puntos de partida a ajustar con datos reales. Los IDs están en
+`0` hasta crearlos en Creator Hub y pegarlos en `MonetizationConfig.lua`.
+
+| Tipo | Contenido |
+|---|---|
+| **Ofertas (1 vez)** | 🎁 Starter Pack 149 R$ (25k Cash, 3 packs Rare, 1 Epic, huevo Rare, 5 regaderas, 30 min x2 Cash) · 👑 Pro Pack 399 R$ |
+| **Boosts** | x2 Cash / Crecimiento 19 R$ · x2 Suerte 49 R$ (10 min, se acumulan) · 🚀 Super Boost 30 min 99 R$ |
+| **Utilidades** | ⏩ Crecimiento instantáneo 29 R$ · 🛡️ Escudo 30 min 39 R$ |
+| **Paquetes** | Pack Epic x3 79 R$ · Huevos Rare x3 59 R$ · Pack Legendary x2 199 R$ |
+| **Cash** | 19 / 49 / 149 / 399 R$ (10k / 60k / 250k / 1M) |
+| **Pases** | x2 Cash 79 · VIP 299 (+15% Cash, pack Rare diario) · +3 huecos de flores 149 · Pulgar verde 99 · Granjero incansable 149 · Lucky Mutation 199 · Velocidad extra 149 · Maestro del escudo 249 |
+
+Los boosts se guardan como hora de fin en el perfil; la tienda muestra los
+activos y un aviso recomienda la oferta de bienvenida tras 2,5 min de juego.
 
 ### Antes de publicar
 1. Crea Game Passes y Developer Products en Creator Hub y pega los IDs en

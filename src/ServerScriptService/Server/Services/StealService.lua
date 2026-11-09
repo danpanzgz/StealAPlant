@@ -24,6 +24,7 @@ local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
 local GardenService = require(script.Parent.GardenService)
 local PlantService = require(script.Parent.PlantService)
+local MonetizationService = require(script.Parent.MonetizationService)
 local InventoryService = require(script.Parent.InventoryService)
 local DefenseService = require(script.Parent.DefenseService)
 local QuestService = require(script.Parent.QuestService)
@@ -116,7 +117,7 @@ function StealService.ToggleGardenShield(player: Player): (boolean, string?)
 	dome.Position = floor.Position + Vector3.new(0, 16, 0)
 	dome.Parent = garden
 	domeByUser[player.UserId] = dome
-	domeUntil[player.UserId] = now + DOME_DURATION
+	domeUntil[player.UserId] = now + DOME_DURATION * MonetizationService.GetDomeMultiplier(player)
 	domeCooldownUntil[player.UserId] = now + DOME_COOLDOWN
 	player:SetAttribute("GardenShieldUntil", domeUntil[player.UserId])
 	return true, "activated"

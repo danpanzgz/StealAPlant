@@ -74,6 +74,8 @@ local function newDefaultProfile(): any
 		ownedGamePasses = {},
 		questProgress = {},
 		receipts = {}, -- [tostring(PurchaseId)] = true (compras ya concedidas)
+		oncePurchased = {}, -- [productKey] = true (ofertas de una sola compra)
+		boosts = {}, -- [cash|growth|luck] = os.time() en que termina el boost
 		lastDailyRewardAt = 0,
 		dailyRewardStreak = 0,
 		stats = {

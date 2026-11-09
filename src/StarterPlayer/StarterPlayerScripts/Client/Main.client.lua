@@ -62,6 +62,8 @@ ClientState.SetInventoryFromSnapshot(snapshot.inventory)
 ClientState.GardenLevel = snapshot.gardenLevel
 ClientState.Defenses = snapshot.defenses
 ClientState.Passes = snapshot.passes
+ClientState.Boosts = snapshot.boosts or {}
+ClientState.OncePurchased = snapshot.oncePurchased or {}
 ClientState.PlacedPlants = snapshot.placedPlants or {}
 ClientState.EquippedGear = snapshot.equippedGear or {}
 

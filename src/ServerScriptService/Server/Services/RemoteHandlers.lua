@@ -335,6 +335,8 @@ function RemoteHandlers.Init()
 			defenses = defenses,
 			stats = profile.stats,
 			passes = MonetizationService.GetOwned(player),
+			boosts = profile.boosts or {},
+			oncePurchased = profile.oncePurchased or {},
 			event = EventService.GetState(),
 			catalog = ShopService.GetAvailableCatalog(player),
 		}
