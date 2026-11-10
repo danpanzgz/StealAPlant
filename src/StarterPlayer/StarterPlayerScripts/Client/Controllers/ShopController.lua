@@ -1,4 +1,10 @@
 --!strict
+--[[
+	ShopController.lua
+	Tiendas físicas del mapa (Semillas / Herramientas / Huevos). Cada puesto
+	abre SOLO lo que vende. No hay botón en el HUD: hay que ir caminando.
+	El stock se precarga y se guarda en caché, así que el panel abre al instante.
+]]
 
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
@@ -12,182 +18,175 @@ local FarmArt = require(script.Parent.Parent.Modules.FarmArt)
 local ShopController = {}
 local snapshotFn = Net.GetRemoteFunction("GetShopStock")
 local buyFn = Net.GetRemoteFunction("BuyShopItem")
-local listFrame: ScrollingFrame
+
 local hud: any
+local listFrame: ScrollingFrame
+local panelFrame: Frame
+local titleLabel: TextLabel? = nil
+local cached: any = nil
 local restockAt = 0
 local timerLabel: TextLabel?
 local activeCategory = "Seeds"
-local refresh: () -> ()
-local renderCategoryButtons: () -> ()
+local buying = false
 
-local categories = {
-	{ id = "Seeds", label = "Semillas", kind = "pack" },
-	{ id = "Gear", label = "Herramientas", kind = "gear" },
-	{ id = "Pets", label = "Huevos", kind = "petEgg" },
+local CATEGORY = {
+	Seeds = { kind = "pack", title = "🌱 Tienda de semillas", empty = "Sin packs ahora mismo. Vuelve en el próximo restock." },
+	Gear = { kind = "gear", title = "🧰 Tienda de herramientas", empty = "Sin herramientas ahora mismo. Vuelve en el próximo restock." },
+	Pets = { kind = "petEgg", title = "🥚 Tienda de huevos", empty = "Sin huevos ahora mismo. Vuelve en el próximo restock." },
 }
-local categoryKinds = { Seeds = "pack", Gear = "gear", Pets = "petEgg" }
 
 local function formatTime(seconds: number): string
 	seconds = math.max(0, math.floor(seconds))
 	return string.format("%d:%02d", seconds // 60, seconds % 60)
 end
 
-local function createCard(item: any, order: number)
+local render: () -> ()
+
+local function addItem(item: any, order: number)
 	local rarity = RarityConfig[item.rarity]
-	local card = UI.Card(listFrame, 96, order)
-	if rarity then
-		local stripe = Instance.new("Frame")
-		stripe.Size = UDim2.new(0, 6, 1, 0)
-		stripe.ZIndex = card.ZIndex + 1
-		stripe.BackgroundColor3 = rarity.color
-		stripe.BorderSizePixel = 0
-		stripe.Parent = card
-		UI.Round(stripe, 8)
-	end
-
-	local icon
+	local color = if rarity then rarity.color else UI.Colors.Gold
+	local card = UI.Card(listFrame, 150, order)
+	card.BorderColor3 = color
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Size = UDim2.fromOffset(52, 56)
+	holder.AnchorPoint = Vector2.new(0.5, 0)
+	holder.Position = UDim2.new(0.5, 0, 0, 4)
+	holder.ZIndex = card.ZIndex + 1
+	holder.Parent = card
 	if item.kind == "petEgg" then
-		icon = FarmArt.CreateEggIcon(card, rarity and rarity.color or UI.Colors.Gold)
+		FarmArt.CreateEggIcon(holder, color)
 	elseif item.kind == "pack" then
-		icon = FarmArt.CreateSeedPackIcon(card, rarity and rarity.color or UI.Colors.Green)
+		FarmArt.CreateSeedPackIcon(holder, color)
 	elseif item.kind == "gear" then
-		icon = FarmArt.CreateGearIcon(card, item.gearId, rarity and rarity.color or UI.Colors.Grey)
+		FarmArt.CreateGearIcon(holder, item.gearId, color)
 	end
-	if icon then
-		icon.Position = UDim2.fromOffset(8, 20)
-	end
-
-	UI.Label(card, item.displayName, UDim2.new(1, -190, 0, 23), UDim2.new(0, 68, 0, 5))
-	local description = UI.Label(
-		card,
-		(rarity and rarity.displayName or item.rarity) .. " · " .. item.description,
-		UDim2.new(1, -190, 0, 38),
-		UDim2.new(0, 68, 0, 31),
-		rarity and rarity.color or UI.Colors.Muted,
-		false
-	)
-	description.TextWrapped = true
-	UI.Label(
-		card,
-		string.format("Limit %d · %d left this restock", item.limit, item.remaining),
-		UDim2.new(1, -190, 0, 18),
-		UDim2.new(0, 68, 0, 70),
-		UI.Colors.Muted,
-		false
-	)
-
-	local buttonText = if item.remaining <= 0 then "Agotado" else ("$" .. UI.Money(item.price))
-	local button = UI.Button(
-		card,
-		buttonText,
-		if item.remaining <= 0 then UI.Colors.Grey else UI.Colors.Green,
-		UDim2.new(0, 106, 0, 42),
-		UDim2.new(1, -116, 0.5, -21)
-	)
+	local name = UI.Label(card, item.displayName, UDim2.new(1, -8, 0, 18), UDim2.new(0, 4, 0, 62), UI.Colors.Text, true)
+	name.TextXAlignment = Enum.TextXAlignment.Center
+	name.TextTruncate = Enum.TextTruncate.AtEnd
+	name.TextScaled = false
+	name.TextSize = 13
+	local stock = UI.Label(card, string.format("Quedan %d de %d", item.remaining, item.limit), UDim2.new(1, -8, 0, 14), UDim2.new(0, 4, 0, 80), if item.remaining > 0 then UI.Colors.Muted else Color3.fromRGB(190, 70, 60), false)
+	stock.TextXAlignment = Enum.TextXAlignment.Center
+	stock.TextScaled = false
+	stock.TextSize = 11
+	local soldOut = item.remaining <= 0
+	local button = UI.Button(card, if soldOut then "Agotado" else ("$" .. UI.Money(item.price)), if soldOut then UI.Colors.Grey else UI.Colors.Green, UDim2.new(1, -16, 0, 36), UDim2.new(0, 8, 1, -42))
+	button.TextSize = 14
 	button.Activated:Connect(function()
-		if item.remaining <= 0 then
+		if soldOut or buying then
 			return
 		end
-		button.Active = false
+		buying = true
 		local result = buyFn:InvokeServer(item.itemId)
-		button.Active = true
+		buying = false
 		if result and result.success then
-			hud.Push("Compraste " .. result.displayName, "good")
-			task.defer(refresh)
+			hud.Push("🛒 Compraste " .. result.displayName, "good")
+			task.spawn(function()
+				local fresh = snapshotFn:InvokeServer()
+				if fresh and fresh.success then
+					cached = fresh
+					restockAt = fresh.nextRestockAt or restockAt
+					if hud.IsPanelOpen("Shop") then
+						render()
+					end
+				end
+			end)
 		else
 			hud.Fail(result and result.reason)
 		end
 	end)
 end
 
-renderCategoryButtons = function()
-	local card = UI.Card(listFrame, 40, -80)
-	for index, category in ipairs(categories) do
-		local width = 1 / #categories
-		local button = UI.Button(
-			card,
-			category.label,
-			if activeCategory == category.id then UI.Colors.Green else UI.Colors.Grey,
-			UDim2.new(width, -6, 0, 30),
-			UDim2.new((index - 1) * width, 3, 0, 5)
-		)
-		button.TextSize = 11
-		button.Activated:Connect(function()
-			activeCategory = category.id
-			refresh()
-		end)
+render = function()
+	local category = CATEGORY[activeCategory]
+	if titleLabel then
+		titleLabel.Text = category.title
+	end
+	UI.ClearList(listFrame)
+	UI.UseGrid(listFrame, Vector2.new(150, 150), 8)
+	if not cached then
+		local note = UI.Label(listFrame, "Cargando stock...", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 0), UI.Colors.Muted, false)
+		note.LayoutOrder = 1
+		return
+	end
+	restockAt = cached.nextRestockAt or restockAt
+	local count = 0
+	for _, item in ipairs(cached.items) do
+		if item.kind == category.kind then
+			count += 1
+			addItem(item, count)
+		end
+	end
+	if count == 0 then
+		local note = UI.Label(listFrame, category.empty, UDim2.new(1, 0, 0, 50), UDim2.new(0, 0, 0, 0), UI.Colors.Muted, false)
+		note.LayoutOrder = 1
+		note.TextWrapped = true
 	end
 end
 
-refresh = function()
+local function loadStock()
 	local snapshot = snapshotFn:InvokeServer()
-	if not snapshot or not snapshot.success then
-		hud.Push("No se pudo cargar el stock de la tienda", "warn")
-		return
-	end
-	UI.ClearList(listFrame)
-	restockAt = snapshot.nextRestockAt or 0
-	local header = UI.Card(listFrame, 44, -100)
-	timerLabel = UI.Label(
-		header,
-		"Stock global · se renueva en " .. formatTime(restockAt - os.time()),
-		UDim2.new(1, -16, 1, -10),
-		UDim2.new(0, 8, 0, 5),
-		UI.Colors.Gold,
-		true
-	)
-	timerLabel.TextXAlignment = Enum.TextXAlignment.Center
-	local note = UI.Card(listFrame, 38, -90)
-	UI.Label(note, "Stock global · límite personal por reabastecimiento", UDim2.new(1, -16, 1, -8), UDim2.new(0, 8, 0, 4), UI.Colors.Muted, false)
-	renderCategoryButtons()
-
-	local filteredItems = {}
-	for _, item in ipairs(snapshot.items) do
-		if item.kind == categoryKinds[activeCategory] then
-			table.insert(filteredItems, item)
+	if snapshot and snapshot.success then
+		cached = snapshot
+		restockAt = snapshot.nextRestockAt or 0
+		if hud.IsPanelOpen("Shop") then
+			render()
 		end
-	end
-	if #filteredItems == 0 then
-		local empty = UI.Card(listFrame, 58, 1)
-		UI.Label(empty, "No hay artículos. Vuelve después del siguiente reabastecimiento.", UDim2.new(1, -16, 1, -12), UDim2.new(0, 8, 0, 6), UI.Colors.Muted, false)
-		return
-	end
-	for index, item in ipairs(filteredItems) do
-		createCard(item, index)
+	elseif snapshot then
+		hud.Fail(snapshot.reason)
 	end
 end
 
 function ShopController.Init(_snapshot: any, hudController: any)
 	hud = hudController
-	local _, list = hud.CreatePanel("Shop", "Seeds, Eggs & Gear", refresh)
-	listFrame = list
-
-	local button = hud.CreateActionButton("ShopButton", "SHOP", "Tienda")
-	button.Activated:Connect(function()
-		hud.TogglePanel("Shop")
+	local frame, list = hud.CreatePanel("Shop", "Tienda", function()
+		render() -- al instante con la caché
+		task.spawn(loadStock)
 	end)
+	panelFrame = frame
+	listFrame = list
+	for _, child in ipairs(frame:GetChildren()) do
+		if child:IsA("TextLabel") then
+			titleLabel = child
+			break
+		end
+	end
+	-- Hueco bajo el título para el contador de restock.
+	timerLabel = UI.Label(frame, "", UDim2.new(1, -24, 0, 18), UDim2.new(0, 12, 0, 60), UI.Colors.Gold, true)
+	if timerLabel then
+		timerLabel.TextScaled = false
+		timerLabel.TextSize = 13
+		timerLabel.TextXAlignment = Enum.TextXAlignment.Center
+	end
+	list.Position = UDim2.new(0, 8, 0, 84)
+	list.Size = UDim2.new(1, -16, 1, -92)
 
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
 		if who == Players.LocalPlayer and prompt.Name == "ShopPrompt" then
 			local shopType = prompt:GetAttribute("ShopType")
-			if type(shopType) == "string" and categoryKinds[shopType] then
+			if type(shopType) == "string" and CATEGORY[shopType] then
 				activeCategory = shopType
 			end
-			hud.TogglePanel("Shop")
+			if hud.IsPanelOpen("Shop") then
+				render()
+			else
+				hud.TogglePanel("Shop")
+			end
 		end
 	end)
 
 	Net.GetRemoteEvent("ShopStockUpdated").OnClientEvent:Connect(function()
-		if hud.IsPanelOpen("Shop") then
-			refresh()
-		end
+		task.spawn(loadStock)
 	end)
 
+	task.spawn(loadStock)
+	-- El contador solo corre mientras el panel está abierto.
 	task.spawn(function()
 		while true do
 			task.wait(1)
-			if timerLabel and timerLabel.Parent and hud.IsPanelOpen("Shop") then
-				timerLabel.Text = "Stock global · se renueva en " .. formatTime(restockAt - os.time())
+			if timerLabel and hud.IsPanelOpen("Shop") then
+				timerLabel.Text = "⏱️ Restock en " .. formatTime(restockAt - os.time())
 			end
 		end
 	end)

@@ -35,9 +35,11 @@ local OfflineEarningsService = require(Server.Services.OfflineEarningsService)
 local RebirthService = require(Server.Services.RebirthService)
 local PetService = require(Server.Services.PetService)
 local SlapService = require(Server.Services.SlapService)
+local LeaderboardDisplay = require(Server.Services.LeaderboardDisplay)
 
 MapBuilder.BuildWorld()
 StealService.CreateTutorialGarden(MapBuilder.TutorialGardenCenter)
+LeaderboardDisplay.Build(MapBuilder.PlazaCenter + Vector3.new(0, 0.45, 8))
 
 RemoteHandlers.Init()
 MonetizationService.Init()

@@ -1100,6 +1100,10 @@ function InventoryController.Init(hudController: any)
 		ClientState.SetInventoryFromSnapshot(inventory)
 		ClientState.PlacedPlants = placedPlants or ClientState.PlacedPlants
 		ClientState.EquippedGear = equippedGear or ClientState.EquippedGear
+		-- Si la planta que se iba a colocar ya no está (vendida, regalada), se cancela.
+		if pendingPlantPlacementUid and not findPlantByUid(pendingPlantPlacementUid) then
+			InventoryController.CancelPlacementSilently()
+		end
 		if hud.IsPanelOpen("Bag") then
 			render()
 		end

@@ -48,6 +48,7 @@ local MESSAGES: { [string]: string } = {
 	no_free_slot = "🛡️ No te quedan huecos de defensa. Mejora el jardín",
 	invalid_args = "⚠️ Acción no válida",
 	garden_unavailable = "🏡 Tu jardín aún no está listo",
+	nothing_to_sell = "🧺 No tienes nada que vender aquí",
 	use_seed_packs = "🎁 Abre los packs desde la mochila",
 }
 
