@@ -1,4 +1,4 @@
-# Steal a Plant — Estructura del proyecto (v1.1)
+# Steal a Plant — Estructura del proyecto (v1.2)
 
 Simulador multiplayer de cultivo, colección, mutaciones y robo entre
 jugadores. Clasificación de madurez: **MinimalViolence (Occasional/Mild)** —
@@ -64,7 +64,7 @@ StealAPlant/
 | `EventConfig` | RainShower (crecimiento x1.2 + Wet) y GoldRush (venta x1.5) |
 | `SoundConfig` | Efectos, ambiente por evento y música (ids vacíos = silencio) |
 | `SeasonConfig` | Pase de Temporada: 30 niveles, XP por acción, premios free/premium, ciclo de 30 días |
-| `ShopConfig`, `DefenseConfig`, `QuestConfig`, `DailyRewardConfig`, `ZoneConfig`, `MonetizationConfig` | Tienda, defensas, misiones, recompensa diaria, zonas, pases y productos |
+| `RebirthConfig` (sacrificios, suerte, cobro, palos), `ShopConfig`, `DefenseConfig`, `QuestConfig`, `DailyRewardConfig`, `MonetizationConfig` | Tienda, defensas, misiones, recompensa diaria, zonas, pases y productos |
 
 ### Services (servidor)
 `DataService` (session locking + `UpdateAsync`), `EconomyService`,
@@ -73,14 +73,14 @@ StealAPlant/
 `ShopService` + `StockService`, `StealService`, `SlapService`,
 `DefenseService`, `QuestService`, `DailyRewardService`, `EventService`,
 `LeaderboardService`, `SeasonService` (XP, niveles y premios), `MonetizationService` (`ProcessReceipt` idempotente),
-`OfflineEarningsService`, `RebirthService`, `PetService`, `ZoneService`,
+`OfflineEarningsService`, `RebirthService`, `PetService`, `LeaderboardDisplay` (estatuas + tablón),
 `MapBuilder` (mapa y atmósfera por código) y `RemoteHandlers`.
 
 ### Controladores (cliente)
 `HUDController`, `ShopController`, `InventoryController`, `GardenController`,
 `QuestController`, `SeasonController`, `LeaderboardController`, `StoreController`,
-`PlantController`, `SlapController`, `StealController`, `PromptController`,
-`ProgressController`, `IndexController` (Plant Index), `AudioController`,
+`PlantController`, `HotbarController` (barra rápida), `RebirthController`, `SettingsController`,
+`SellController`, `SlapController` (empujón), `PromptController`, `IndexController` (Plant Index), `AudioController`,
 `EffectsController` (animaciones, clima de eventos) y `SkyController`
 (sol cuadrado, nubes voxel y luciérnagas).
 
@@ -102,20 +102,18 @@ StealAPlant/
 ## Jugabilidad
 
 ### Controles
-- **Plantar**: equipa semillas y haz clic/toca la tierra de tu jardín.
-- **Colocar una flor de la mochila**: elígela en la mochila y toca/clic en el
-  suelo de tu jardín, o usa **📍 Colocar aquí** (delante de ti). **Cancelar**
-  con el botón, **Esc/X**. Mando: **A** coloca delante de ti. Cupo base: 6,
-  más 2 por Rebirth.
-- **Cosechar**: **E** o botón táctil sobre una parcela madura.
-- **Robar**: mantén **F** o el botón táctil en una planta madura ajena.
-- **Mochila**: tecla **º** (Backquote) o botón. Mando: **Y**.
-- **Palo (SLAP)**: botón, **G** o **R2**; empuja sin daño.
-- Botones: Tienda · Mochila · Jardín · Tareas · Top · Pases · Palo · 📖 Índice
-  · 🔊 Audio (3 estados).
-- La interfaz es pixel-art con degradados suaves y animación al pulsar.
-  Los controles de teclado/mando se definen con el Input Action System
-  (`Workspace > Behavior > PlayerScriptsUseInputActionSystem = Enabled`).
+- **Barra rápida** (6 casillas, teclas **1-6**): palo, semillas, flores y herramientas.
+  Se rellena desde 🎒 Mochila: **mantén y arrastra** un cuadradito a una casilla
+  (o pulsa 📌 Barra). Se guarda en tu perfil.
+- **Plantar**: equipa una semilla (casilla o "En mano") y toca el suelo marrón
+  de tu jardín. La semilla sigue en la mano mientras te queden.
+- **Colocar una flor**: casilla con la flor o **Colocar** en la mochila.
+- **Cosechar**: **E** o botón táctil. **Robar**: mantén **F** en una planta ajena.
+- **Palo**: equípalo en la casilla 1 y toca/clic para empujar (sin daño).
+- **Menú ☰** agrupa Mochila, Jardín, Índice, Tareas, Temporada, Top, Tienda Robux
+  y Ajustes (música, efectos, gráficos). Fuera del menú solo **Menú** y **Renacer**.
+- **Domo antirrobo**: pisa la placa azul del patio, junto a la puerta.
+- Los errores salen en rojo y claros ("No tienes suficiente dinero").
 
 ### Mapa (12 jugadores)
 Dos filas de 6 jardines frente a frente con una calle y plaza central
@@ -171,14 +169,29 @@ cliente solo pide `ClaimSeasonReward(nivel, pista)`.
 - Robo: hay que llevar la flor hasta tu base; el portador va más lento. Si
   te pillan vuelves a tu jardín con efecto cómico. Escudo al entrar y tras
   ser robado; domo de jardín (45 s, 180 s de recarga).
-- Rebirth: reinicia progresión con bonificación persistente, más cupo de
-  flores y valla nueva.
+- Rebirth (botón ♻️): cuesta dinero **y sacrificar una planta concreta** (la ve el panel).
+  Cobras **x2, x3, x4...**, la **suerte** (`Luck`) se duplica, ganas +2 huecos de
+  plantar y el palo sube de nivel. Máximo 20 huecos; el jardín empieza con 6 y los
+  huecos son parcelas invisibles dentro del patio.
+
+## Cambios v1.2 (rediseño)
+- Jardín con **una sola puerta**; el patio ya no crece hacia la calle.
+- Sin zonas (eliminadas `ZoneConfig`/`ZoneService`) ni pase de huecos extra.
+- **Índice** en cuadrícula: estadísticas (dinero total, plantas plantadas, suerte,
+  renacimientos) y, al descubrir una planta, ficha con peso mín./máx.
+- **Mochila** en cuadrícula con pestañas, detalle abajo, arrastrar a la barra y
+  apertura instantánea (usa la caché del cliente). La venta ya no está en la mochila.
+- **Tiendas** físicas con cartel de madera, cada una solo con lo que vende;
+  **puesto de venta** (mano, comunes, repetidas, todo). El botón del HUD es solo Robux.
+- **Plaza**: 3 estatuas de los más ricos y tablón de madera Top 50 (`LeaderboardDisplay`;
+  clave de OrderedDataStore nueva `..._LifetimeCash_v2`).
+- Temporada con scroll horizontal; cielo sin popping de nubes y sol siempre cuadrado.
 
 ## Audio
 `SoundConfig.lua` define clic, menú, plantar/colocar, huevos, eventos,
 ambiente y música. Los ids por defecto son archivos internos de Roblox que
 pueden no existir en tu versión; los **ambientes y la música están vacíos**.
-Sube tus sonidos a Roblox y pega los ids. Al jugar, la consola avisa de los
+Sube tus sonidos a Roblox y pega los ids. **Música sin ids verificados** (no pude comprobar ids de terceros: busca en Creator Store > Audio, gratis, y pruébalos en Studio). Al jugar, la consola avisa de los
 ids que fallan (`[Audio] No carga el sonido ...`).
 
 ### Monetización (Robux)
@@ -223,9 +236,12 @@ dos IDs de recursos no aprobados o incompatibles y un `Workspace.Script`
 externo que imprime `Hello world!`; no son errores de carga del juego.
 
 ### Pendiente
-- Probar todo en Studio y en móvil de gama baja (las vallas de piedra,
-  hierro, cristal y oro añaden varios cientos de piezas por jardín).
-- Sonidos y música propios; tutorial guiado con pasos bloqueantes; más
-  defensas; prueba con mando físico.
-- Nombres de las vallas/efectos y precios de pases/productos por afinar con
-  datos reales. Sin trading (los regalos se limitan a semillas y flores).
+- **Nada de v1.2 se ha probado en Studio**: probar mochila/arrastre, barra, renacer,
+  placa del domo, estatuas (avatar vía `CreateHumanoidModelFromUserIdAsync`), tablón,
+  tiendas y venta; ajustar posiciones del mapa si algo se solapa.
+- Música ambiente (ids) y sonidos propios (alarma/robo usan sonidos internos provisionales).
+- IDs de Game Passes y Developer Products siguen en 0.
+- Estadísticas guardadas de jugadores antiguos: `lifetimeCash` parte de su total ganado.
+- Controles de mando para la barra rápida y la mochila (solo táctil/ratón/teclado).
+- Rendimiento en móvil de gama baja (vallas de piedra/cristal/oro); tutorial guiado;
+  más defensas; precios por afinar. Sin trading.

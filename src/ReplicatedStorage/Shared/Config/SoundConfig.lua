@@ -16,7 +16,7 @@ export type SfxDef = { id: string, volume: number, speed: number? }
 
 local SoundConfig = {}
 
--- Volúmenes globales (0..1). El jugador puede silenciar música/efectos desde el botón de audio.
+-- Volúmenes globales (0..1). El jugador los apaga desde ⚙️ Ajustes.
 SoundConfig.MusicVolume = 0.35
 SoundConfig.SfxVolume = 0.8
 
@@ -29,8 +29,8 @@ SoundConfig.Sfx = {
 	EggShake = { id = "rbxasset://sounds/clickfast.wav", volume = 0.7, speed = 0.8 }, -- se agita (x4)
 	EggCrack = { id = "rbxasset://sounds/snap.mp3", volume = 0.9, speed = 0.55 }, -- grieta
 	EggHatch = { id = "rbxasset://sounds/victory.wav", volume = 0.9, speed = 1.2 }, -- se abre
-	Alarm = { id = "", volume = 0.7 }, -- alarma del jardín
-	StealResolved = { id = "", volume = 0.7 },
+	Alarm = { id = "rbxasset://sounds/electronicpingshort.wav", volume = 0.8, speed = 1.9 }, -- alarma del jardín (provisional, interno de Roblox)
+	StealResolved = { id = "rbxasset://sounds/switch.wav", volume = 0.8, speed = 0.8 }, -- robo resuelto (provisional)
 	Click = { id = "rbxasset://sounds/clickfast.wav", volume = 0.45, speed = 1.1 }, -- cualquier botón
 	MenuOpen = { id = "rbxasset://sounds/switch.wav", volume = 0.55 }, -- abrir/cerrar menú
 	PlantPlace = { id = "rbxasset://sounds/snap.mp3", volume = 0.8, speed = 0.7 }, -- flor colocada
@@ -49,6 +49,10 @@ SoundConfig.Ambient = {
 
 -- Canciones de fondo (se reproducen en bucle, en orden aleatorio).
 -- Añade las que quieras: { id = "rbxassetid://...", volume = 1 }
+-- PENDIENTE: no hay ids de música verificados. Los listados web de "song ids" no son
+-- fiables (Roblox bloquea la mayoría de audios de terceros). Elige canciones en
+-- Creator Store > Audio (filtra por gratis), prueba que suenan en Studio y pega aquí
+-- el id. Estilo recomendado: acústica / lo-fi alegre y tranquila, bucle largo.
 SoundConfig.Music = {
 	-- { id = "rbxassetid://0000000", volume = 1 },
 } :: { { id: string, volume: number } }
