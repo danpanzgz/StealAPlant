@@ -779,6 +779,84 @@ function PlantService.SellCollectionPlant(player: Player, plantUid: string): (bo
 	return true, cashEarned
 end
 
+local RARITY_ORDER: { [string]: number } = {}
+for index, id in ipairs((RarityConfig :: any).Order or {}) do
+	RARITY_ORDER[id] = index
+end
+
+-- Cotización de venta: lista de plantas que entrarían en cada modo.
+-- mode: "all" | "common" (hasta Uncommon) | "duplicates" (deja la mejor de cada especie)
+local function selectPlants(player: Player, mode: string): ({ any }, number)
+	local profile = DataService.GetProfile(player)
+	local picked: { any } = {}
+	local total = 0
+	if not profile or not profile.inventory then
+		return picked, 0
+	end
+	local multiplier = MonetizationService.GetCashMultiplier(player)
+	local best: { [string]: any } = {}
+	if mode == "duplicates" then
+		for _, plant in ipairs(profile.inventory.plants) do
+			local current = best[plant.plantId]
+			if not current or (tonumber(plant.value) or 0) > (tonumber(current.value) or 0) then
+				best[plant.plantId] = plant
+			end
+		end
+	end
+	for _, plant in ipairs(profile.inventory.plants) do
+		local value = math.max(0, math.floor(tonumber(plant.value) or 0))
+		local include = false
+		if mode == "all" then
+			include = true
+		elseif mode == "common" then
+			local config = PlantConfig[plant.plantId]
+			local rank = config and RARITY_ORDER[config.rarity] or 99
+			include = rank <= 2
+		elseif mode == "duplicates" then
+			include = best[plant.plantId] ~= plant
+		end
+		if include and value > 0 then
+			table.insert(picked, plant)
+			total += math.floor(value * multiplier)
+		end
+	end
+	return picked, total
+end
+
+function PlantService.GetSellQuote(player: Player): { [string]: any }
+	local quotes = {}
+	for _, mode in ipairs({ "all", "common", "duplicates" }) do
+		local picked, total = selectPlants(player, mode)
+		quotes[mode] = { count = #picked, cash = total }
+	end
+	return quotes
+end
+
+function PlantService.SellMany(player: Player, mode: string): (boolean, any)
+	if mode ~= "all" and mode ~= "common" and mode ~= "duplicates" then
+		return false, "invalid_args"
+	end
+	if player:GetAttribute("CarryingStolenPlant") == true then
+		return false, "carrying_stolen_plant"
+	end
+	local picked, total = selectPlants(player, mode)
+	if #picked == 0 then
+		return false, "nothing_to_sell"
+	end
+	local sold = 0
+	for _, plant in ipairs(picked) do
+		if InventoryService.RemovePlant(player, plant.uid) then
+			sold += 1
+		end
+	end
+	if sold == 0 then
+		return false, "nothing_to_sell"
+	end
+	EconomyService.AddCash(player, total, "sell_plant")
+	QuestService.Report(player, "earn_cash", total)
+	return true, { count = sold, cash = total }
+end
+
 function PlantService.UseGear(player: Player, gearId: string): (boolean, any)
 	if player:GetAttribute("CarryingStolenPlant") == true then
 		return false, "carrying_stolen_plant"

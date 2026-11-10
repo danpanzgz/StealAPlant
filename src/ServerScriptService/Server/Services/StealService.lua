@@ -341,7 +341,38 @@ local function attemptSteal(thief: Player, owner: Player, plotIndex: number, plo
 	end
 end
 
+local padDebounce: { [number]: number } = {}
+
+local function hookDomePad(pad: Instance)
+	if pad.Name ~= "DomePad" or not pad:IsA("BasePart") then
+		return
+	end
+	pad.Touched:Connect(function(hit: BasePart)
+		local character = hit:FindFirstAncestorOfClass("Model")
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if not player or player.UserId ~= pad:GetAttribute("OwnerUserId") then
+			return
+		end
+		local now = os.clock()
+		if now - (padDebounce[player.UserId] or 0) < 1.5 then
+			return
+		end
+		padDebounce[player.UserId] = now
+		local ok, result = StealService.ToggleGardenShield(player)
+		if ok then
+			notifyEvent:FireClient(player, { text = if result == "activated" then "🛡️ ¡Domo antirrobo activado!" else "Domo desactivado", kind = if result == "activated" then "good" else "info" })
+		else
+			notifyEvent:FireClient(player, { text = if result == "shield_cooldown" then "⏳ El domo está recargándose" else "No se pudo activar el domo", kind = "warn" })
+		end
+	end)
+end
+
 function StealService.Init()
+	local gardens = workspace:WaitForChild("Gardens")
+	for _, descendant in ipairs(gardens:GetDescendants()) do
+		hookDomePad(descendant)
+	end
+	gardens.DescendantAdded:Connect(hookDomePad)
 	GardenService.PlotCreated:Connect(function(owner: Player, plotIndex: number, plotPart: BasePart)
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "Steal"

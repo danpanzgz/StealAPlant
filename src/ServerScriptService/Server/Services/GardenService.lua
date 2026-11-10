@@ -182,6 +182,33 @@ local function rebuildGardenYard(gardenModel: Model, origin: Vector3, plotCount:
 		mk(yard, "GatePaving", Vector3.new(6, 0.12, 5), origin + Vector3.new(15, 0.26, gateZ + dir * 3), Color3.fromRGB(190, 180, 160), Enum.Material.Cobblestone, false)
 	end
 
+	-- Placa de presión del domo antirrobo: el dueño la pisa dentro del patio, junto a la puerta.
+	do
+		local inward = if gateZ == frontZ then -1 else 1
+		local padPos = origin + Vector3.new(15, 0.3, gateZ + inward * 4.5)
+		local pad = mk(yard, "DomePad", Vector3.new(5, 0.35, 5), padPos, Color3.fromRGB(70, 190, 255), Enum.Material.Neon, false)
+		pad.Shape = Enum.PartType.Cylinder
+		pad.Orientation = Vector3.new(0, 0, 90)
+		pad.CanTouch = true
+		pad:SetAttribute("OwnerUserId", gardenModel:GetAttribute("OwnerUserId"))
+		local gui = Instance.new("BillboardGui")
+		gui.Size = UDim2.fromOffset(150, 34)
+		gui.StudsOffset = Vector3.new(0, 3, 0)
+		gui.AlwaysOnTop = false
+		gui.MaxDistance = 40
+		gui.Adornee = pad
+		gui.Parent = pad
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Text = "🛡️ DOMO · pisa aquí"
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.TextStrokeTransparency = 0.3
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.Parent = gui
+	end
+
 	local lanternColor = if style.sparkle then style.capColor else Color3.fromRGB(255, 226, 130)
 
 	-- Un tramo de valla recto. axis "x": a lo largo de X en z=fixed; "z": a lo largo de Z en x=fixed.
