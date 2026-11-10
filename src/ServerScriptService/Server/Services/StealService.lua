@@ -105,16 +105,57 @@ function StealService.ToggleGardenShield(player: Player): (boolean, string?)
 	end
 	local dome = Instance.new("Part")
 	dome.Name = "GardenShieldDome"
-	dome.Shape = Enum.PartType.Ball
+	dome.Shape = Enum.PartType.Block
 	dome.Anchored = true
 	dome.CanCollide = false
 	dome.CanTouch = false
 	dome.CanQuery = false
-	dome.Transparency = 0.78
+	dome.Transparency = 0.7
 	dome.Material = Enum.Material.ForceField
 	dome.Color = Color3.fromRGB(105, 208, 255)
-	dome.Size = Vector3.new(floor.Size.X + 8, 34, floor.Size.Z + 8)
-	dome.Position = floor.Position + Vector3.new(0, 16, 0)
+	dome.Size = Vector3.new(floor.Size.X + 8, 30, floor.Size.Z + 8)
+	dome.Position = floor.Position + Vector3.new(0, 14.5, 0)
+	-- Aristas de neón para que se lea como un cubo (la tela ForceField sola se ve borrosa).
+	local half = dome.Size / 2
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local post = Instance.new("Part")
+			post.Name = "DomeEdge"
+			post.Anchored = true
+			post.CanCollide = false
+			post.CanTouch = false
+			post.CanQuery = false
+			post.CastShadow = false
+			post.Material = Enum.Material.Neon
+			post.Color = Color3.fromRGB(150, 230, 255)
+			post.Size = Vector3.new(0.8, dome.Size.Y, 0.8)
+			post.Position = dome.Position + Vector3.new(sx * half.X, 0, sz * half.Z)
+			post.Parent = dome
+		end
+	end
+	for _, sy in ipairs({ -1, 1 }) do
+		for _, axis in ipairs({ "X", "Z" }) do
+			for _, side in ipairs({ -1, 1 }) do
+				local bar = Instance.new("Part")
+				bar.Name = "DomeEdge"
+				bar.Anchored = true
+				bar.CanCollide = false
+				bar.CanTouch = false
+				bar.CanQuery = false
+				bar.CastShadow = false
+				bar.Material = Enum.Material.Neon
+				bar.Color = Color3.fromRGB(150, 230, 255)
+				if axis == "X" then
+					bar.Size = Vector3.new(dome.Size.X, 0.8, 0.8)
+					bar.Position = dome.Position + Vector3.new(0, sy * half.Y, side * half.Z)
+				else
+					bar.Size = Vector3.new(0.8, 0.8, dome.Size.Z)
+					bar.Position = dome.Position + Vector3.new(side * half.X, sy * half.Y, 0)
+				end
+				bar.Parent = dome
+			end
+		end
+	end
 	dome.Parent = garden
 	domeByUser[player.UserId] = dome
 	domeUntil[player.UserId] = now + DOME_DURATION * MonetizationService.GetDomeMultiplier(player)

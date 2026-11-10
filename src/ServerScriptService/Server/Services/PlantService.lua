@@ -26,6 +26,7 @@ local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
 local GardenService = require(script.Parent.GardenService)
+local TrapService = require(script.Parent.TrapService)
 local EconomyService = require(script.Parent.EconomyService)
 local InventoryService = require(script.Parent.InventoryService)
 local EventService = require(script.Parent.EventService)
@@ -878,6 +879,9 @@ function PlantService.UseGear(player: Player, gearId: string): (boolean, any)
 		return true, profile.equippedGear[gearId] == true
 	end
 
+	if gear.kind == "trap" then
+		return TrapService.Place(player, gearId)
+	end
 	if gearId ~= "WaterCan" then
 		return false, "unsupported_gear"
 	end

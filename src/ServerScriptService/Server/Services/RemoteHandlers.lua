@@ -240,6 +240,9 @@ function RemoteHandlers.Init()
 			return { success = false, reason = "unknown_gear" }
 		end
 		local ok, result = PlantService.UseGear(player, gearId)
+		if ok and type(result) == "table" and result.placed then
+			return { success = true, placed = true, active = result.active, max = result.max }
+		end
 		return { success = ok, reason = if ok then nil else result, equipped = if ok then result else nil }
 	end
 

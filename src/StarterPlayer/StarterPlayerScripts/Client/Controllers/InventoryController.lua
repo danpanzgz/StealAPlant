@@ -561,10 +561,15 @@ local function describe(sel: Selection): (string, string, { { text: string, colo
 		local count = (ClientState.Inventory.gear or {})[sel.id] or 0
 		if gear then
 			local equipped = ClientState.EquippedGear[sel.id] == true
-			add(if gear.kind == "passive" then (if equipped then "Quitar" else "Equipar") else "Usar", UI.Colors.Green, function()
+			add(if gear.kind == "passive" then (if equipped then "Quitar" else "Equipar") elseif gear.kind == "trap" then "Colocar" else "Usar", UI.Colors.Green, function()
 				local result = useGearFn:InvokeServer(sel.id)
 				if result and result.success then
-					hud.Push("🧰 Hecho", "good")
+					if result.placed then
+						hud.Push(string.format("🪤 Trampa colocada (%d/%d)", result.active, result.max), "good")
+						hud.TogglePanel("Bag")
+					else
+						hud.Push("🧰 Hecho", "good")
+					end
 				else
 					hud.Fail(result and result.reason)
 				end

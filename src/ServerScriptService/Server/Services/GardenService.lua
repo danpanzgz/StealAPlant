@@ -126,7 +126,7 @@ local function buildGateSign(yard: Folder, center: Vector3, style: any, ownerNam
 		sub.TextScaled = true
 		sub.TextTransparency = 0.15
 		sub.TextColor3 = style.signTextColor
-		sub.Text = if rebirths > 0 then ("♻️ Rebirth " .. rebirths .. " · " .. style.name) else ("🌱 " .. style.name)
+		sub.Text = if rebirths > 0 then ("♻️ Rebirth " .. rebirths) else "🌱 Jardín nuevo"
 		sub.Parent = gui
 	end
 end

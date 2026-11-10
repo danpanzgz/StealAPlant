@@ -144,6 +144,33 @@ ShopConfig.Gear = {
 		kind = "passive",
 		sizeLuck = 2,
 	},
+	NetTrap = {
+		displayName = "Trampa de red",
+		description = "Colócala en tu jardín: ralentiza a quien la pise. Máx. 3 activas.",
+		rarity = "Uncommon",
+		price = 900,
+		stockWeight = 40,
+		kind = "trap",
+		color = Color3.fromRGB(95, 190, 255),
+		slowSeconds = 5,
+		speedFactor = 0.35,
+	},
+	BubbleTrap = {
+		displayName = "Trampa de burbuja",
+		description = "Atrapa al intruso en una burbuja unos segundos. Máx. 3 activas.",
+		rarity = "Rare",
+		price = 4200,
+		stockWeight = 22,
+		kind = "trap",
+		color = Color3.fromRGB(255, 140, 220),
+		slowSeconds = 3.5,
+		speedFactor = 0,
+		bubble = true,
+	},
 }
+
+-- Trampas colocadas a la vez por jugador.
+ShopConfig.MaxActiveTraps = 3
+ShopConfig.TrapLifetimeSeconds = 900
 
 return ShopConfig

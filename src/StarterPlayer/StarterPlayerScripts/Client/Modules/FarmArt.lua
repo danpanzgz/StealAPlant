@@ -76,6 +76,12 @@ function FarmArt.CreateGearIcon(parent: Instance, gearId: string, rarityColor: C
 		pixel(art, "CanHandleInner", UDim2.fromOffset(4, 9), UDim2.fromOffset(32, 18), Color3.fromRGB(246, 233, 196), z + 1)
 		pixel(art, "CanSpout", UDim2.fromOffset(12, 5), UDim2.fromOffset(34, 25), Color3.fromRGB(72, 126, 144), z + 2)
 		pixel(art, "CanRose", UDim2.fromOffset(7, 7), UDim2.fromOffset(43, 24), rarityColor, z + 3)
+	elseif gearId == "NetTrap" or gearId == "BubbleTrap" then
+		pixel(art, "TrapPad", UDim2.fromOffset(40, 10), UDim2.fromOffset(6, 38), Color3.fromRGB(88, 96, 110), z)
+		pixel(art, "TrapTop", UDim2.fromOffset(34, 6), UDim2.fromOffset(9, 34), rarityColor, z + 1)
+		pixel(art, "TrapNetA", UDim2.fromOffset(4, 22), UDim2.fromOffset(16, 14), Color3.fromRGB(245, 245, 250), z + 2)
+		pixel(art, "TrapNetB", UDim2.fromOffset(4, 22), UDim2.fromOffset(30, 14), Color3.fromRGB(245, 245, 250), z + 2)
+		pixel(art, "TrapNetC", UDim2.fromOffset(28, 4), UDim2.fromOffset(12, 22), Color3.fromRGB(245, 245, 250), z + 3)
 	else
 		pixel(art, "TotemBase", UDim2.fromOffset(30, 9), UDim2.fromOffset(11, 43), Color3.fromRGB(105, 69, 43), z)
 		pixel(art, "TotemBody", UDim2.fromOffset(22, 31), UDim2.fromOffset(15, 11), Color3.fromRGB(151, 100, 54), z + 1)

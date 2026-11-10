@@ -112,7 +112,10 @@ StealAPlant/
 - **Palo**: equípalo en la casilla 1 y toca/clic para empujar (sin daño).
 - **Menú ☰** agrupa Mochila, Jardín, Índice, Tareas, Temporada, Top, Tienda Robux
   y Ajustes (música, efectos, gráficos). Fuera del menú solo **Menú** y **Renacer**.
-- **Domo antirrobo**: pisa la placa azul del patio, junto a la puerta.
+- **Domo antirrobo** (cúbico): pisa la placa azul del patio, junto a la puerta.
+- **Trampas** (Herramientas): *Trampa de red* y *de burbuja*; se colocan dentro de tu
+  jardín desde la mochila/barra, máx. **3 activas** por jugador; ralentizan o atrapan un
+  instante al intruso (sin daño) y se gastan al saltar o a los 15 min.
 - Los errores salen en rojo y claros ("No tienes suficiente dinero").
 
 ### Mapa (12 jugadores)
@@ -165,7 +168,7 @@ cliente solo pide `ClaimSeasonReward(nivel, pista)`.
 - Offline: se calcula sobre las flores colocadas, máx. 3 h y $100,000.
 - Stock compartido de 5 min (packs, gear y huevos) con límite por jugador y
   MemoryStore entre servidores. Gear: regadera, aspersor, tótem de mutación y
-  de tamaño.
+  de tamaño, trampas.
 - Robo: hay que llevar la flor hasta tu base; el portador va más lento. Si
   te pillan vuelves a tu jardín con efecto cómico. Escudo al entrar y tras
   ser robado; domo de jardín (45 s, 180 s de recarga).

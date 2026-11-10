@@ -356,7 +356,11 @@ function HotbarController.Use(slot: number)
 	elseif entry.kind == "gear" then
 		local result = useGearFn:InvokeServer(entry.id)
 		if result and result.success then
-			hud.Push("🧰 Herramienta usada", "good")
+			if result.placed then
+				hud.Push(string.format("🪤 Trampa colocada (%d/%d)", result.active, result.max), "good")
+			else
+				hud.Push("🧰 Herramienta usada", "good")
+			end
 		else
 			hud.Fail(result and result.reason)
 		end

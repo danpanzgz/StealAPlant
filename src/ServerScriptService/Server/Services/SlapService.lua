@@ -10,6 +10,7 @@
 
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
@@ -38,26 +39,55 @@ local function findTool(player: Player): Tool?
 	return nil
 end
 
--- Balanceo visual del palo (el Grip se anima desde el servidor y replica).
-local function swing(tool: Tool)
-	local base = tool.Grip
-	task.spawn(function()
-		for step = 1, 5 do
-			if not tool.Parent then
-				return
+-- Golpe visible: el brazo derecho sube y baja con el palo (R15) + estela de aire.
+-- Se anima desde el servidor para que todos lo vean.
+local function swing(character: Model, tool: Tool?)
+	local arm = character:FindFirstChild("RightUpperArm")
+	local shoulder = arm and arm:FindFirstChild("RightShoulder")
+	if shoulder and shoulder:IsA("Motor6D") then
+		local base = shoulder.C0
+		task.spawn(function()
+			local function setAngle(degrees: number, seconds: number)
+				local tween = TweenService:Create(shoulder, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { C0 = base * CFrame.Angles(math.rad(degrees), 0, 0) })
+				tween:Play()
+				tween.Completed:Wait()
 			end
-			tool.Grip = base * CFrame.Angles(math.rad(-18 * step), 0, 0)
-			task.wait(0.03)
-		end
-		for step = 4, 0, -1 do
-			if not tool.Parent then
-				return
+			setAngle(160, 0.1) -- se levanta
+			setAngle(25, 0.09) -- golpe hacia delante
+			setAngle(0, 0.15) -- vuelve
+			shoulder.C0 = base
+		end)
+	end
+	if tool and tool.Parent == character then
+		local base = tool.Grip
+		task.spawn(function()
+			tool.Grip = base * CFrame.Angles(math.rad(-50), 0, 0)
+			task.wait(0.1)
+			tool.Grip = base * CFrame.Angles(math.rad(35), 0, 0)
+			task.wait(0.12)
+			if tool.Parent then
+				tool.Grip = base
 			end
-			tool.Grip = base * CFrame.Angles(math.rad(-18 * step), 0, 0)
-			task.wait(0.04)
-		end
-		tool.Grip = base
-	end)
+		end)
+	end
+	-- Estela: un arco blanco semitransparente delante del jugador.
+	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		local arc = Instance.new("Part")
+		arc.Anchored = true
+		arc.CanCollide = false
+		arc.CanQuery = false
+		arc.CanTouch = false
+		arc.CastShadow = false
+		arc.Material = Enum.Material.Neon
+		arc.Color = Color3.new(1, 1, 1)
+		arc.Transparency = 0.45
+		arc.Size = Vector3.new(5, 0.2, 5)
+		arc.CFrame = root.CFrame * CFrame.new(0, 0.5, -3.2) * CFrame.Angles(0, 0, math.rad(35))
+		arc.Parent = workspace
+		TweenService:Create(arc, TweenInfo.new(0.25), { Transparency = 1, Size = Vector3.new(8, 0.2, 8) }):Play()
+		Debris:AddItem(arc, 0.3)
+	end
 end
 
 local function pop(root: BasePart, color: Color3)
@@ -91,10 +121,7 @@ function SlapService.TrySlap(player: Player)
 	if not root then
 		return
 	end
-	local tool = findTool(player)
-	if tool and tool.Parent == character then
-		swing(tool)
-	end
+	swing(character :: Model, findTool(player))
 
 	local look = root.CFrame.LookVector
 	local best: Player? = nil
