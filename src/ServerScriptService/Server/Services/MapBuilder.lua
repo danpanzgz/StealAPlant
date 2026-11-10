@@ -317,7 +317,7 @@ function MapBuilder.BuildWorld()
 	atmosphere.Offset = 0.3
 	atmosphere.Color = Color3.fromRGB(255, 190, 160)
 	atmosphere.Decay = Color3.fromRGB(190, 100, 150)
-	atmosphere.Glare = 0.7
+	atmosphere.Glare = 0 -- el brillo redondo del Atmosphere se mezclaba con el sol cuadrado
 	atmosphere.Haze = 1.4
 
 	local bloom = ensure("BloomEffect", "SunsetBloom") :: BloomEffect
@@ -326,7 +326,7 @@ function MapBuilder.BuildWorld()
 	bloom.Threshold = 1.1
 
 	local rays = ensure("SunRaysEffect", "SunsetRays") :: SunRaysEffect
-	rays.Intensity = 0.1
+	rays.Intensity = 0 -- los rayos radiales redondean el sol cuadrado
 	rays.Spread = 0.8
 
 	local grade = ensure("ColorCorrectionEffect", "SunsetGrade") :: ColorCorrectionEffect
