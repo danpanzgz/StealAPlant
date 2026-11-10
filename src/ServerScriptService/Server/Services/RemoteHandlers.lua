@@ -24,6 +24,7 @@ local EventService = require(script.Parent.EventService)
 local MonetizationService = require(script.Parent.MonetizationService)
 local OfflineEarningsService = require(script.Parent.OfflineEarningsService)
 local RebirthService = require(script.Parent.RebirthService)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local InventoryService = require(script.Parent.InventoryService)
 local PetService = require(script.Parent.PetService)
 local SeasonService = require(script.Parent.SeasonService)
@@ -167,6 +168,68 @@ function RemoteHandlers.Init()
 			return { success = true, cashEarned = result, cash = EconomyService.GetCash(player) }
 		end
 		return { success = false, reason = result }
+	end
+
+	Net.GetRemoteFunction("SellHeld").OnServerInvoke = function(player: Player, plantUid: any)
+		if isRateLimited(player, "SellHeld") then
+			return RATE_LIMITED
+		end
+		local ok, result = PlantService.SellCollectionPlant(player, plantUid)
+		if ok then
+			return { success = true, cashEarned = result, cash = EconomyService.GetCash(player) }
+		end
+		return { success = false, reason = result }
+	end
+
+	Net.GetRemoteFunction("GetSellQuote").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetSellQuote") then
+			return RATE_LIMITED
+		end
+		return { success = true, quotes = PlantService.GetSellQuote(player), multiplier = MonetizationService.GetCashMultiplier(player) }
+	end
+
+	Net.GetRemoteFunction("SellAll").OnServerInvoke = function(player: Player, mode: any)
+		if isRateLimited(player, "SellAll") then
+			return RATE_LIMITED
+		end
+		if type(mode) ~= "string" then
+			return { success = false, reason = "invalid_args" }
+		end
+		local ok, result = PlantService.SellMany(player, mode)
+		if ok then
+			return { success = true, count = result.count, cashEarned = result.cash, cash = EconomyService.GetCash(player) }
+		end
+		return { success = false, reason = result }
+	end
+
+	local HOTBAR_SLOTS = 6
+	local HOTBAR_KINDS = { stick = true, seed = true, plant = true, gear = true }
+	Net.GetRemoteFunction("GetHotbar").OnServerInvoke = function(player: Player)
+		local profile = DataService.GetProfile(player)
+		if not profile then
+			return { success = false, reason = "no_profile" }
+		end
+		return { success = true, hotbar = profile.hotbar }
+	end
+
+	Net.GetRemoteFunction("SetHotbar").OnServerInvoke = function(player: Player, layout: any)
+		if isRateLimited(player, "SetHotbar") then
+			return RATE_LIMITED
+		end
+		local profile = DataService.GetProfile(player)
+		if not profile or type(layout) ~= "table" then
+			return { success = false, reason = "invalid_args" }
+		end
+		local clean: { [string]: any } = {}
+		for slot = 1, HOTBAR_SLOTS do
+			local entry = layout[tostring(slot)]
+			if type(entry) == "table" and HOTBAR_KINDS[entry.kind] and type(entry.id) == "string" and #entry.id <= 64 then
+				clean[tostring(slot)] = { kind = entry.kind, id = entry.id }
+			end
+		end
+		profile.hotbar = clean
+		DataService.MarkDirty(player)
+		return { success = true }
 	end
 
 	Net.GetRemoteFunction("UseGear").OnServerInvoke = function(player: Player, gearId: any)
@@ -319,6 +382,45 @@ function RemoteHandlers.Init()
 			return { success = false, reason = reason }
 		end
 		return { success = true, target = target.Name, plantId = tostring(plantId), amount = count }
+	end
+
+	Net.GetRemoteFunction("GetRebirthInfo").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetRebirthInfo") then
+			return RATE_LIMITED
+		end
+		local info = RebirthService.GetInfo(player)
+		return { success = info ~= nil, info = info }
+	end
+
+	Net.GetRemoteFunction("GetIndexData").OnServerInvoke = function(player: Player)
+		if isRateLimited(player, "GetIndexData") then
+			return RATE_LIMITED
+		end
+		local profile = DataService.GetProfile(player)
+		if not profile then
+			return { success = false, reason = "no_profile" }
+		end
+		local records = {}
+		for plantId, record in pairs(profile.plantRecords or {}) do
+			records[plantId] = { min = record.min, max = record.max, count = record.count }
+		end
+		local used, max = GardenService.GetPlotUsage(player)
+		return {
+			success = true,
+			records = records,
+			index = profile.plantIndex or {},
+			stats = {
+				lifetimeCash = profile.stats.lifetimeCash,
+				plantsPlanted = profile.stats.plantsPlanted,
+				plantsHarvested = profile.stats.plantsHarvested,
+				plantsStolen = profile.stats.plantsStolen,
+				rebirths = profile.rebirthCount or 0,
+				luck = RebirthConfig.Luck(profile.rebirthCount or 0),
+				cashMultiplier = RebirthConfig.CashMultiplier(profile.rebirthCount or 0),
+				plotsUsed = used,
+				plotsMax = max,
+			},
+		}
 	end
 
 	Net.GetRemoteFunction("RebirthPlayer").OnServerInvoke = function(player: Player)

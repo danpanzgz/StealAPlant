@@ -32,6 +32,9 @@ local function refresh()
 	UI.Label(header, "🏆 Más ricos — " .. source, UDim2.new(1, -16, 1, -10), UDim2.new(0, 8, 0, 5), UI.Colors.Gold)
 
 	for _, entry in ipairs(result.entries) do
+		if entry.rank > 10 then
+			break
+		end
 		local top = entry.rank <= 3
 		local row = UI.Card(listFrame, if top then 56 else 44, entry.rank)
 		local rank = UI.Label(row, if top then MEDALS[entry.rank] else ("#" .. entry.rank), UDim2.new(0, 48, 1, -12), UDim2.new(0, 8, 0, 6), if top then MEDAL_COLORS[entry.rank] else UI.Colors.Muted)

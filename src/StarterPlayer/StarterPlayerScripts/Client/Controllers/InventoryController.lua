@@ -19,14 +19,15 @@ local PlantController = require(script.Parent.PlantController)
 local FarmArt = require(script.Parent.Parent.Modules.FarmArt)
 local EffectsController = require(script.Parent.EffectsController)
 local AudioController = require(script.Parent.AudioController)
+local Hotbar = require(script.Parent.HotbarController)
 
 local InventoryController = {}
 local player = Players.LocalPlayer
 local listFrame: ScrollingFrame
 local hud: any
 local stats: any = nil
-local activeTab = "Semillas"
-local sortMode = "Weight"
+local activeTab = "Plantas"
+local sortMode = "Value"
 local searchQuery = ""
 local rarityFilter = "Todas"
 local mutationFilter = "Todas"
@@ -145,7 +146,7 @@ local function openGiftPanel(itemId: string, itemKind: string, displayName: stri
 			if result and result.success then
 				hud.Push("Regalo enviado a " .. other.DisplayName, "good")
 			else
-				hud.Push("No se pudo regalar: " .. tostring(result and result.reason or "error"), "warn")
+				hud.Fail(result and result.reason)
 			end
 			closeGiftPanel()
 			task.defer(function()
@@ -337,6 +338,7 @@ function InventoryController.CancelPlacement()
 	setPlacementContextEnabled(false)
 	stopPlacementPreview()
 	PlantController.RestoreSlapTool()
+	Hotbar.Refresh()
 	hud.Push("Colocación cancelada", "warn")
 end
 
@@ -359,12 +361,13 @@ local function sendPlacement(position: Vector3)
 		setPlacementContextEnabled(false)
 		stopPlacementPreview()
 		PlantController.RestoreSlapTool()
+		Hotbar.Refresh()
 		hud.Push("¡Flor colocada en tu jardín!", "good")
 		AudioController.Play("PlantPlace")
 	else
 		local reason = tostring(if ok and result then result.reason else "error")
 		-- La colocación sigue activa: el jugador puede probar otro punto.
-		hud.Push(PLACE_REASONS[reason] or ("No se pudo colocar: " .. reason), "warn")
+		hud.Push(PLACE_REASONS[reason] or require(ReplicatedStorage.Shared.Modules.ErrorMessages).Get(reason), "warn")
 	end
 end
 
@@ -411,369 +414,431 @@ function InventoryController.ConfirmPlacement(screenPosition: Vector2)
 	confirmAt(screenPosition)
 end
 
-local function makeTabBar()
-	local card = UI.Card(listFrame, 42, -100)
-	for index, tab in ipairs(tabs) do
-		local width = 1 / #tabs
-		local button = UI.Button(
-			card,
-			tab,
-			if activeTab == tab then UI.Colors.Green else UI.Colors.Grey,
-			UDim2.new(width, -6, 0, 32),
-			UDim2.new((index - 1) * width, 3, 0, 5)
-		)
-		button.TextSize = 12
-		button.Activated:Connect(function()
-			activeTab = tab
-			render()
-		end)
-	end
-end
-
-local function makeSearchBar()
-	local card = UI.Card(listFrame, 42, -90)
-	local search = Instance.new("TextBox")
-	search.Name = "InventorySearch"
-	search.Size = UDim2.new(1, -14, 1, -10)
-	search.Position = UDim2.fromOffset(7, 5)
-	search.ZIndex = card.ZIndex + 1
-	search.BackgroundColor3 = Color3.fromRGB(247, 235, 201)
-	search.BorderSizePixel = 2
-	search.BorderColor3 = Color3.fromRGB(112, 78, 43)
-	search.ClearTextOnFocus = false
-	search.PlaceholderText = "Buscar en esta sección..."
-	search.PlaceholderColor3 = UI.Colors.Muted
-	search.Text = searchQuery
-	search.TextColor3 = UI.Colors.Text
-	search.Font = Enum.Font.Gotham
-	search.TextSize = 16
-	search.TextXAlignment = Enum.TextXAlignment.Left
-	search.Parent = card
-	search.FocusLost:Connect(function()
-		searchQuery = search.Text
-		render()
-	end)
-end
-
-local function addSeedRows(order: number)
-	local seedPacks = ClientState.Inventory.seedPacks or {}
-	local hasPack = false
-	local hasVisiblePack = false
-	for packId, count in pairs(seedPacks) do
-		if count > 0 then
-			hasPack = true
-			local pack = ShopConfig.Packs[packId]
-			local packName = pack and pack.displayName or (packId .. " Seed Pack")
-			if matchesSearch(packName, packId) then
-				hasVisiblePack = true
-				order += 1
-				local card = UI.Card(listFrame, 66, order)
-				local packIcon = FarmArt.CreateSeedPackIcon(card, RarityConfig[pack and pack.rarity or "Common"].color)
-				packIcon.Position = UDim2.fromOffset(8, 5)
-				UI.Label(card, packName .. "  x" .. count, UDim2.new(1, -170, 0, 25), UDim2.new(0, 68, 0, 6))
-				UI.Label(card, "Abre semillas aleatorias", UDim2.new(1, -170, 0, 18), UDim2.new(0, 68, 0, 36), UI.Colors.Muted, false)
-				local openButton = UI.Button(card, "Abrir", UI.Colors.Green, UDim2.new(0, 74, 0, 38), UDim2.new(1, -84, 0.5, -19))
-				openButton.Activated:Connect(function()
-					openButton.Active = false
-					local result = openPackFn:InvokeServer(packId)
-					openButton.Active = true
-					if result and result.success then
-						local names = {}
-						for plantId, amount in pairs(result.seeds) do
-							table.insert(names, PlantConfig[plantId].displayName .. " x" .. amount)
-						end
-						table.sort(names)
-						hud.Push("Pack abierto: " .. table.concat(names, ", "), "good")
-					else
-						hud.Push("No se pudo abrir: " .. tostring(result and result.reason or "error"), "warn")
-					end
-				end)
-			end
-		end
-	end
-
-	local ids = {}
-	for plantId, count in pairs(ClientState.Inventory.seeds or {}) do
-		if count > 0 and PlantConfig[plantId] and matchesSearch(PlantConfig[plantId].displayName, plantId) then
-			table.insert(ids, plantId)
-		end
-	end
-	table.sort(ids, function(a, b)
-		local rarityA = RarityConfig[PlantConfig[a].rarity].order
-		local rarityB = RarityConfig[PlantConfig[b].rarity].order
-		if rarityA ~= rarityB then
-			return rarityA > rarityB
-		end
-		return PlantConfig[a].displayName < PlantConfig[b].displayName
-	end)
-	if #ids == 0 and not hasVisiblePack then
-		order += 1
-		local card = UI.Card(listFrame, 58, order)
-		local message = if searchQuery ~= "" and (hasPack or next(ClientState.Inventory.seeds or {}) ~= nil)
-			then "No hay resultados para esa búsqueda."
-			else "No tienes semillas. Visita la tienda para conseguir un pack."
-		UI.Label(card, message, UDim2.new(1, -16, 1, -12), UDim2.new(0, 8, 0, 6), UI.Colors.Muted, false)
-	end
-
-	for _, plantId in ipairs(ids) do
-		order += 1
-		local data = PlantConfig[plantId]
-		local rarity = RarityConfig[data.rarity]
-		local card = UI.Card(listFrame, 68, order)
-		local cropIcon = FarmArt.CreateCropIcon(card, plantId, data.color)
-		cropIcon.Position = UDim2.fromOffset(8, 6)
-		local stripe = Instance.new("Frame")
-		stripe.Size = UDim2.new(0, 5, 1, 0)
-		stripe.BackgroundColor3 = rarity.color
-		stripe.BorderSizePixel = 0
-		stripe.Parent = card
-		UI.Round(stripe, 8)
-		UI.Label(card, data.displayName .. " Seeds  x" .. ClientState.Inventory.seeds[plantId], UDim2.new(1, -240, 0, 24), UDim2.new(0, 68, 0, 6))
-		UI.Label(card, rarity.displayName .. " · " .. data.growTimeSeconds .. "s to grow", UDim2.new(1, -240, 0, 18), UDim2.new(0, 68, 0, 35), rarity.color, false)
-		local holdButton = UI.Button(card, "Usar", UI.Colors.Blue, UDim2.new(0, 62, 0, 30), UDim2.new(1, -138, 0.5, -15))
-		holdButton.Activated:Connect(function()
-			if PlantController.EquipSeed(plantId) then
-				hud.Push("Semilla en mano: toca una parcela para plantar.", "good")
-			else
-				hud.Push("No tienes esas semillas", "warn")
-			end
-		end)
-		local giftButton = UI.Button(card, "Regalar", UI.Colors.Grey, UDim2.new(0, 62, 0, 30), UDim2.new(1, -68, 0.5, -15))
-		giftButton.Activated:Connect(function()
-			openGiftPanel(plantId, "seed", data.displayName .. " Seeds")
-		end)
-	end
-end
 
 local function comparePlants(a: any, b: any): boolean
-	if sortMode == "Weight" then
-		return (a.weight or 0) > (b.weight or 0)
-	elseif sortMode == "Rarity" then
-		local rankA = RarityConfig[a.rarity or PlantConfig[a.plantId].rarity].order
-		local rankB = RarityConfig[b.rarity or PlantConfig[b.plantId].rarity].order
-		if rankA ~= rankB then
-			return rankA > rankB
-		end
-	elseif sortMode == "Mutation" then
-		local valueA = a.mutation and a.mutation ~= false and a.mutation ~= "" and 1 or 0
-		local valueB = b.mutation and b.mutation ~= false and b.mutation ~= "" and 1 or 0
-		if valueA ~= valueB then
-			return valueA > valueB
-		end
-		if valueA == 1 and a.mutation ~= b.mutation then
-			return tostring(a.mutation) > tostring(b.mutation)
-		end
-	elseif sortMode == "Value" then
-		return (a.value or 0) > (b.value or 0)
+	local valueA, valueB = a.value or 0, b.value or 0
+	if valueA ~= valueB then
+		return valueA > valueB
 	end
 	return tostring(a.uid) < tostring(b.uid)
 end
 
-local function makePlantSortBar(order: number): number
-	order += 1
-	local card = UI.Card(listFrame, 40, order)
-	for index, mode in ipairs(sortModes) do
-		local width = 1 / #sortModes
-		local button = UI.Button(
-			card,
-			mode.label,
-			if sortMode == mode.id then UI.Colors.Blue else UI.Colors.Grey,
-			UDim2.new(width, -6, 0, 30),
-			UDim2.new((index - 1) * width, 3, 0, 5)
-		)
-		button.TextSize = 11
+-- ===== Cuadrícula de objetos + detalle + arrastrar a la barra rápida =====
+
+type Selection = { kind: string, id: string }
+local selected: Selection? = nil
+local tabFrame: Frame
+local detailFrame: Frame
+local detailTitle: TextLabel
+local detailSub: TextLabel
+local detailButtons: Frame
+local bagFrame: Frame
+local ghost: Frame? = nil
+local justDragged = false
+local dragConns: { RBXScriptConnection } = {}
+
+local TAB_ICONS = { Plantas = "🌼 Plantas", Semillas = "🌱 Semillas", Equipo = "🧰 Equipo", Mascotas = "🐾 Mascotas" }
+local tabs2 = { "Plantas", "Semillas", "Equipo", "Mascotas" }
+
+local function findPlantByUid(uid: string): any
+	for _, plant in ipairs(ClientState.Inventory.plants or {}) do
+		if plant.uid == uid then
+			return plant
+		end
+	end
+	for _, plant in ipairs(ClientState.PlacedPlants or {}) do
+		if plant.uid == uid then
+			return plant
+		end
+	end
+	return nil
+end
+
+function InventoryController.StartPlacement(uid: string)
+	if player:GetAttribute("CarryingStolenPlant") == true then
+		hud.Fail("carrying_stolen_plant")
+		return
+	end
+	pendingPlantPlacementUid = uid
+	PlantController.ClearSeedTools(false)
+	setPlacementContextEnabled(true)
+	startPlacementPreview()
+	if hud.IsPanelOpen("Bag") then
+		hud.TogglePanel("Bag")
+	end
+	hud.Push("Toca la zona marrón de tu jardín para colocarla.", "good")
+	Hotbar.Refresh()
+end
+
+function InventoryController.GetPlacingUid(): string?
+	return pendingPlantPlacementUid
+end
+
+function InventoryController.CancelPlacementSilently()
+	if not pendingPlantPlacementUid then
+		return
+	end
+	pendingPlantPlacementUid = nil
+	setPlacementContextEnabled(false)
+	stopPlacementPreview()
+	Hotbar.Refresh()
+end
+
+local function pinSelection(sel: Selection)
+	local slot = Hotbar.FirstFree()
+	if not slot then
+		hud.Push("La barra está llena: arrastra el objeto sobre una casilla.", "warn")
+		return
+	end
+	Hotbar.Assign(slot, { kind = sel.kind, id = sel.id })
+	hud.Push("📌 Guardado en la casilla " .. slot, "good")
+end
+
+-- Texto y botones del objeto seleccionado (se recalcula con datos frescos).
+local function describe(sel: Selection): (string, string, { { text: string, color: Color3, run: () -> () } })
+	local buttons = {}
+	local function add(text: string, color: Color3, run: () -> ())
+		table.insert(buttons, { text = text, color = color, run = run })
+	end
+	if sel.kind == "seed" then
+		local data = PlantConfig[sel.id]
+		local count = ClientState.Inventory.seeds[sel.id] or 0
+		local rarity = RarityConfig[data.rarity]
+		add("🌱 En mano", UI.Colors.Green, function()
+			if PlantController.EquipSeed(sel.id) then
+				hud.TogglePanel("Bag")
+				hud.Push("Semilla en mano: toca una parcela para plantar.", "good")
+			else
+				hud.Fail("no_seed_in_inventory")
+			end
+		end)
+		add("📌 Barra", UI.Colors.Blue, function() pinSelection(sel) end)
+		add("🎁", UI.Colors.Grey, function() openGiftPanel(sel.id, "seed", data.displayName .. " Seeds") end)
+		return data.displayName .. " Seeds  x" .. count, rarity.displayName .. " · crece en " .. data.growTimeSeconds .. "s", buttons
+	elseif sel.kind == "pack" then
+		local pack = ShopConfig.Packs[sel.id]
+		local count = ClientState.Inventory.seedPacks[sel.id] or 0
+		add("Abrir", UI.Colors.Green, function()
+			local result = openPackFn:InvokeServer(sel.id)
+			if result and result.success then
+				local names = {}
+				for plantId, amount in pairs(result.seeds) do
+					table.insert(names, PlantConfig[plantId].displayName .. " x" .. amount)
+				end
+				table.sort(names)
+				hud.Push("Pack abierto: " .. table.concat(names, ", "), "good")
+			else
+				hud.Fail(result and result.reason)
+			end
+		end)
+		return (pack and pack.displayName or sel.id) .. "  x" .. count, "Abre semillas aleatorias", buttons
+	elseif sel.kind == "plant" or sel.kind == "placed" then
+		local plant = findPlantByUid(sel.id)
+		local data = plant and PlantConfig[plant.plantId]
+		if not plant or not data then
+			return "—", "", buttons
+		end
+		local rarity = RarityConfig[plant.rarity or data.rarity]
+		if sel.kind == "plant" then
+			add("Colocar", UI.Colors.Green, function() InventoryController.StartPlacement(sel.id) end)
+			add("📌 Barra", UI.Colors.Blue, function() pinSelection(sel) end)
+			add("🎁", UI.Colors.Grey, function() openGiftPanel(sel.id, "plant", data.displayName) end)
+		else
+			add("Recoger", UI.Colors.Blue, function()
+				local result = collectPlantFn:InvokeServer(sel.id)
+				if result and result.success then
+					hud.Push("La flor volvió a tu mochila", "good")
+				else
+					hud.Fail(result and result.reason)
+				end
+			end)
+		end
+		return PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutations or plant.mutation, plant.weight),
+			string.format("%s · vale $%s · $%s/min", rarity.displayName, UI.Money(plant.value or 0), UI.Money(plant.incomePerMinute or 0)),
+			buttons
+	elseif sel.kind == "gear" then
+		local gear = ShopConfig.Gear[sel.id]
+		local count = (ClientState.Inventory.gear or {})[sel.id] or 0
+		if gear then
+			local equipped = ClientState.EquippedGear[sel.id] == true
+			add(if gear.kind == "passive" then (if equipped then "Quitar" else "Equipar") else "Usar", UI.Colors.Green, function()
+				local result = useGearFn:InvokeServer(sel.id)
+				if result and result.success then
+					hud.Push("🧰 Hecho", "good")
+				else
+					hud.Fail(result and result.reason)
+				end
+			end)
+			add("📌 Barra", UI.Colors.Blue, function() pinSelection(sel) end)
+			return gear.displayName .. "  x" .. count, gear.description, buttons
+		end
+	elseif sel.kind == "stick" then
+		add("📌 Barra", UI.Colors.Blue, function() pinSelection(sel) end)
+		return "🪵 Palo", "Empuja a los ladrones. Mejora solo con cada renacimiento.", buttons
+	end
+	return "—", "", buttons
+end
+
+local function showDetail()
+	for _, child in ipairs(detailButtons:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
+	local sel = selected
+	if not sel then
+		detailTitle.Text = "Toca un objeto"
+		detailSub.Text = "Mantén pulsado y arrastra a la barra de abajo para tenerlo a mano."
+		return
+	end
+	local title, sub, buttons = describe(sel)
+	detailTitle.Text = title
+	detailSub.Text = sub
+	for index, info in ipairs(buttons) do
+		local button = UI.Button(detailButtons, info.text, info.color, UDim2.fromOffset(if #info.text > 6 then 92 else 62, 34), nil)
+		button.LayoutOrder = index
+		button.TextSize = 12
 		button.Activated:Connect(function()
-			sortMode = mode.id
-			render()
+			info.run()
+			task.defer(function()
+				if detailFrame.Parent then
+					showDetail()
+				end
+			end)
 		end)
 	end
-	return order
 end
 
-local function makePlantFilterBar(order: number): number
-	order += 1
-	local card = UI.Card(listFrame, 42, order)
-	local rarityName = if rarityFilter == "Todas" then "Todas" else RarityConfig[rarityFilter].displayName
-	local rarityButton = UI.Button(
-		card,
-		"Rareza: " .. rarityName,
-		UI.Colors.Grey,
-		UDim2.new(0.52, -7, 0, 32),
-		UDim2.new(0, 3, 0, 5)
-	)
-	rarityButton.TextSize = 11
-	rarityButton.Activated:Connect(function()
-		local currentIndex = table.find(rarityFilters, rarityFilter) or 1
-		rarityFilter = rarityFilters[currentIndex % #rarityFilters + 1]
-		render()
-	end)
-
-	local mutationButton = UI.Button(
-		card,
-		"Mutación: " .. mutationFilter,
-		UI.Colors.Grey,
-		UDim2.new(0.48, -7, 0, 32),
-		UDim2.new(0.52, 4, 0, 5)
-	)
-	mutationButton.TextSize = 11
-	mutationButton.Activated:Connect(function()
-		if mutationFilter == "Todas" then
-			mutationFilter = "Con mutación"
-		elseif mutationFilter == "Con mutación" then
-			mutationFilter = "Sin mutación"
-		else
-			mutationFilter = "Todas"
-		end
-		render()
-	end)
-	return order
+local function endDrag()
+	for _, conn in ipairs(dragConns) do
+		conn:Disconnect()
+	end
+	table.clear(dragConns)
+	if ghost then
+		ghost:Destroy()
+		ghost = nil
+	end
+	listFrame.ScrollingEnabled = true
 end
 
-local function addPlantRows(order: number)
-	order = makePlantFilterBar(order)
-	order = makePlantSortBar(order)
-	local plants = {}
-	for _, plant in ipairs(ClientState.Inventory.plants or {}) do
-		local data = PlantConfig[plant.plantId]
-		local rarity = plant.rarity or (data and data.rarity)
-		local hasMutation = plant.mutation ~= nil and plant.mutation ~= false and plant.mutation ~= ""
-		local matchesRarity = rarityFilter == "Todas" or rarity == rarityFilter
-		local matchesMutation = mutationFilter == "Todas"
-			or (mutationFilter == "Con mutación" and hasMutation)
-			or (mutationFilter == "Sin mutación" and not hasMutation)
-		if data and matchesRarity and matchesMutation and matchesSearch(data.displayName, plant.plantId, plant.mutation) then
-			table.insert(plants, plant)
+-- Pulsación larga (o arrastre con ratón) sobre un cuadradito -> fantasma que se suelta en la barra.
+local function attachDrag(tile: GuiButton, entry: { kind: string, id: string })
+	tile.InputBegan:Connect(function(input: InputObject)
+		local kind = input.UserInputType
+		if kind ~= Enum.UserInputType.MouseButton1 and kind ~= Enum.UserInputType.Touch then
+			return
 		end
-	end
-	table.sort(plants, comparePlants)
-	local placedPlants = {}
-	for _, plant in ipairs(ClientState.PlacedPlants) do
-		local data = PlantConfig[plant.plantId]
-		local rarity = plant.rarity or (data and data.rarity)
-		local hasMutation = plant.mutation ~= nil and plant.mutation ~= false and plant.mutation ~= ""
-		local matchesMutation = mutationFilter == "Todas"
-			or (mutationFilter == "Con mutación" and hasMutation)
-			or (mutationFilter == "Sin mutación" and not hasMutation)
-		if data and (rarityFilter == "Todas" or rarity == rarityFilter)
-			and matchesMutation and matchesSearch(data.displayName, plant.plantId, plant.mutation) then
-			table.insert(placedPlants, plant)
+		endDrag()
+		local startPos = Vector2.new(input.Position.X, input.Position.Y)
+		local dragging = false
+		local alive = true
+		local function begin()
+			if dragging or not alive then
+				return
+			end
+			dragging = true
+			justDragged = true
+			listFrame.ScrollingEnabled = false
+			local screen = hud.GetScreenGui()
+			local g = Instance.new("Frame")
+			g.Name = "DragGhost"
+			g.Size = UDim2.fromOffset(60, 60)
+			g.AnchorPoint = Vector2.new(0.5, 0.5)
+			g.BackgroundColor3 = UI.Colors.Card
+			g.BackgroundTransparency = 0.15
+			g.BorderSizePixel = 3
+			g.BorderColor3 = UI.Colors.Gold
+			g.ZIndex = 80
+			g.Parent = screen
+			local holder = Instance.new("Frame")
+			holder.BackgroundTransparency = 1
+			holder.Size = UDim2.fromOffset(52, 56)
+			holder.Position = UDim2.fromOffset(4, 2)
+			holder.ZIndex = 81
+			holder.Parent = g
+			Hotbar.FillIcon(holder, entry)
+			ghost = g
 		end
-	end
-	if #plants == 0 and #placedPlants == 0 then
-		order += 1
-		local card = UI.Card(listFrame, 58, order)
-		local message = if #(ClientState.Inventory.plants or {}) > 0 or #ClientState.PlacedPlants > 0
-			then "No hay flores que coincidan con estos filtros."
-			else "Reclama un cultivo maduro para añadir una flor a tu colección."
-		UI.Label(card, message, UDim2.new(1, -16, 1, -12), UDim2.new(0, 8, 0, 6), UI.Colors.Muted, false)
-	end
-
-	for _, plant in ipairs(plants) do
-		local data = PlantConfig[plant.plantId]
-		if data then
-			order += 1
-			local rarity = RarityConfig[plant.rarity or data.rarity]
-			local card = UI.Card(listFrame, 94, order)
-			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
-			cropIcon.Position = UDim2.fromOffset(8, 6)
-			local title = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutations or plant.mutation, plant.weight), UDim2.new(1, -82, 0, 24), UDim2.new(0, 68, 0, 5), rarity.color)
-			title.TextTruncate = Enum.TextTruncate.AtEnd
-			UI.Label(
-				card,
-				string.format("%s · Sell $%s · $%s/min", rarity.displayName, UI.Money(plant.value or 0), UI.Money(plant.incomePerMinute or 0)),
-				UDim2.new(1, -82, 0, 18),
-				UDim2.new(0, 68, 0, 30),
-				UI.Colors.Muted,
-				false
-			)
-
-			local actionButton = UI.Button(card, "Colocar", UI.Colors.Green, UDim2.new(0, 68, 0, 28), UDim2.new(0, 68, 1, -34))
-			actionButton.TextSize = 11
-			actionButton.Activated:Connect(function()
-				pendingPlantPlacementUid = plant.uid
-				PlantController.ClearSeedTools(false)
-				setPlacementContextEnabled(true)
-				startPlacementPreview()
-				hud.TogglePanel("Bag")
-				hud.Push("Toca la zona verde de tu jardín para colocarla. Esc para cancelar.", "good")
-			end)
-
-			local sellButton = UI.Button(card, "Vender", Color3.fromRGB(174, 116, 50), UDim2.new(0, 58, 0, 28), UDim2.new(0, 142, 1, -34))
-			sellButton.TextSize = 11
-			sellButton.Activated:Connect(function()
-				local result = sellPlantFn:InvokeServer(plant.uid)
-				if result and result.success then
-					hud.Push("Vendiste por $" .. UI.Money(result.cashEarned), "good")
-				else
-					hud.Push("No se pudo vender: " .. tostring(result and result.reason or "error"), "warn")
-				end
-			end)
-
-			local giftButton = UI.Button(card, "Regalar", UI.Colors.Grey, UDim2.new(0, 58, 0, 28), UDim2.new(0, 206, 1, -34))
-			giftButton.TextSize = 11
-			giftButton.Activated:Connect(function()
-				openGiftPanel(plant.uid, "plant", data.displayName)
-			end)
+		local function place(position: Vector3)
+			if ghost then
+				local inset = hud.GetScreenGui().AbsolutePosition
+				ghost.Position = UDim2.fromOffset(position.X - inset.X, position.Y - inset.Y)
+			end
 		end
-	end
-
-	for _, plant in ipairs(placedPlants) do
-		local data = PlantConfig[plant.plantId]
-		if data then
-			order += 1
-			local rarity = RarityConfig[plant.rarity or data.rarity]
-			local card = UI.Card(listFrame, 66, order)
-			local cropIcon = FarmArt.CreateCropIcon(card, plant.plantId, data.color)
-			cropIcon.Position = UDim2.fromOffset(8, 5)
-			local placedTitle = UI.Label(card, PlantInstanceConfig.FormatName(data.displayName, plant.size, plant.mutations or plant.mutation, plant.weight), UDim2.new(1, -164, 0, 24), UDim2.new(0, 68, 0, 6), rarity.color)
-			placedTitle.TextTruncate = Enum.TextTruncate.AtEnd
-			UI.Label(card, "$" .. UI.Money(plant.incomePerMinute or 0) .. " por minuto", UDim2.new(1, -164, 0, 18), UDim2.new(0, 68, 0, 34), UI.Colors.Muted, false)
-			local collectButton = UI.Button(card, "Recoger", UI.Colors.Blue, UDim2.new(0, 72, 0, 34), UDim2.new(1, -82, 0.5, -17))
-			collectButton.Activated:Connect(function()
-				local result = collectPlantFn:InvokeServer(plant.uid)
-				if result and result.success then
-					hud.Push("La flor volvió a tu colección", "good")
-				else
-					hud.Push("No se pudo recoger: " .. tostring(result and result.reason or "error"), "warn")
+		-- El ratón arrastra al instante; el dedo necesita mantener 0.25 s.
+		if kind == Enum.UserInputType.Touch then
+			task.delay(0.25, function()
+				if alive and not dragging and (not input.UserInputState or input.UserInputState ~= Enum.UserInputState.End) then
+					begin()
+					place(input.Position)
 				end
 			end)
 		end
+		table.insert(dragConns, UserInputService.InputChanged:Connect(function(changed: InputObject)
+			if changed ~= input and changed.UserInputType ~= Enum.UserInputType.MouseMovement then
+				return
+			end
+			local now = Vector2.new(changed.Position.X, changed.Position.Y)
+			if not dragging and kind == Enum.UserInputType.MouseButton1 and (now - startPos).Magnitude > 8 then
+				begin()
+			end
+			if not dragging and kind == Enum.UserInputType.Touch and (now - startPos).Magnitude > 14 then
+				alive = false -- el dedo se movió antes: era un scroll
+			end
+			if dragging then
+				place(changed.Position)
+			end
+		end))
+		table.insert(dragConns, UserInputService.InputEnded:Connect(function(ended: InputObject)
+			if ended ~= input then
+				return
+			end
+			alive = false
+			if dragging then
+				local slot = Hotbar.SlotAt(Vector2.new(ended.Position.X, ended.Position.Y))
+				if slot then
+					Hotbar.Assign(slot, entry)
+					hud.Push("📌 Guardado en la casilla " .. slot, "good")
+				end
+				task.delay(0.1, function()
+					justDragged = false
+				end)
+			end
+			endDrag()
+		end))
+	end)
+end
+
+local function addTile(order: number, sel: Selection, title: string, count: number?, color: Color3?, icon: (Frame) -> (), draggable: boolean)
+	local isSelected = selected ~= nil and selected.kind == sel.kind and selected.id == sel.id
+	local tile = UI.Tile(listFrame, { order = order, title = title, count = count, color = color, selected = isSelected, icon = icon })
+	tile.Activated:Connect(function()
+		if justDragged then
+			return
+		end
+		selected = sel
+		for _, other in ipairs(listFrame:GetChildren()) do
+			if other:IsA("TextButton") then
+				other.BorderSizePixel = 3
+			end
+		end
+		tile.BorderSizePixel = 4
+		tile.BorderColor3 = Color3.fromRGB(255, 255, 255)
+		showDetail()
+	end)
+	if draggable then
+		attachDrag(tile, sel)
 	end
 end
 
-local function addGearRows(order: number)
-	local gearCounts = ClientState.Inventory.gear or {}
-	local gearIds = {}
-	for gearId, count in pairs(gearCounts) do
-		local gear = ShopConfig.Gear[gearId]
-		if count > 0 and gear and matchesSearch(gear.displayName, gear.description, gearId) then
-			table.insert(gearIds, gearId)
+local function emptyNote(order: number, text: string)
+	local note = UI.Label(listFrame, text, UDim2.new(1, -16, 0, 60), UDim2.new(0, 8, 0, 8), UI.Colors.Muted, false)
+	note.LayoutOrder = order
+	note.TextWrapped = true
+	note.TextXAlignment = Enum.TextXAlignment.Center
+end
+
+local function fillTiles()
+	local order = 0
+	if activeTab == "Plantas" then
+		local plants = {}
+		for _, plant in ipairs(ClientState.Inventory.plants or {}) do
+			if PlantConfig[plant.plantId] then
+				table.insert(plants, plant)
+			end
+		end
+		table.sort(plants, comparePlants)
+		for _, plant in ipairs(plants) do
+			local data = PlantConfig[plant.plantId]
+			order += 1
+			addTile(order, { kind = "plant", id = plant.uid }, data.displayName, nil, RarityConfig[plant.rarity or data.rarity].color, function(holder)
+				FarmArt.CreateCropIcon(holder, plant.plantId, data.color)
+			end, true)
+		end
+		for _, plant in ipairs(ClientState.PlacedPlants or {}) do
+			local data = PlantConfig[plant.plantId]
+			if data then
+				order += 1
+				addTile(order, { kind = "placed", id = plant.uid }, "📍 " .. data.displayName, nil, Color3.fromRGB(90, 170, 90), function(holder)
+					FarmArt.CreateCropIcon(holder, plant.plantId, data.color)
+				end, false)
+			end
+		end
+		if order == 0 then
+			emptyNote(1, "Aún no tienes plantas. Cosecha una en tu jardín 🌱")
+		end
+	elseif activeTab == "Semillas" then
+		for packId, count in pairs(ClientState.Inventory.seedPacks or {}) do
+			if count > 0 then
+				local pack = ShopConfig.Packs[packId]
+				order += 1
+				addTile(order, { kind = "pack", id = packId }, pack and pack.displayName or packId, count, RarityConfig[pack and pack.rarity or "Common"].color, function(holder)
+					FarmArt.CreateSeedPackIcon(holder, RarityConfig[pack and pack.rarity or "Common"].color)
+				end, false)
+			end
+		end
+		local ids = {}
+		for plantId, count in pairs(ClientState.Inventory.seeds or {}) do
+			if count > 0 and PlantConfig[plantId] then
+				table.insert(ids, plantId)
+			end
+		end
+		table.sort(ids, function(a, b)
+			local ra, rb = RarityConfig[PlantConfig[a].rarity].order, RarityConfig[PlantConfig[b].rarity].order
+			if ra ~= rb then
+				return ra > rb
+			end
+			return PlantConfig[a].displayName < PlantConfig[b].displayName
+		end)
+		for _, plantId in ipairs(ids) do
+			local data = PlantConfig[plantId]
+			order += 1
+			addTile(order, { kind = "seed", id = plantId }, data.displayName, ClientState.Inventory.seeds[plantId], RarityConfig[data.rarity].color, function(holder)
+				FarmArt.CreateCropIcon(holder, plantId, data.color)
+			end, true)
+		end
+		if order == 0 then
+			emptyNote(1, "No tienes semillas. Compra en la tienda de semillas del mapa 🛒")
+		end
+	elseif activeTab == "Equipo" then
+		order += 1
+		addTile(order, { kind = "stick", id = "stick" }, "Palo", nil, Color3.fromRGB(142, 91, 48), function(holder)
+			local mark = UI.Label(holder, "🪵", UDim2.fromScale(1, 1), UDim2.new(0, 0, 0, 0), Color3.new(1, 1, 1))
+			mark.TextScaled = true
+			mark.TextXAlignment = Enum.TextXAlignment.Center
+		end, true)
+		local gearIds = {}
+		for gearId, count in pairs(ClientState.Inventory.gear or {}) do
+			if count > 0 and ShopConfig.Gear[gearId] then
+				table.insert(gearIds, gearId)
+			end
+		end
+		table.sort(gearIds)
+		for _, gearId in ipairs(gearIds) do
+			local gear = ShopConfig.Gear[gearId]
+			order += 1
+			addTile(order, { kind = "gear", id = gearId }, gear.displayName, (ClientState.Inventory.gear or {})[gearId], RarityConfig[gear.rarity].color, function(holder)
+				FarmArt.CreateGearIcon(holder, gearId, RarityConfig[gear.rarity].color)
+			end, true)
 		end
 	end
-	table.sort(gearIds)
-	if #gearIds == 0 then
-		order += 1
-		local card = UI.Card(listFrame, 58, order)
-		local message = if searchQuery ~= "" then "No hay herramientas que coincidan con la búsqueda." else "Compra una regadera, aspersor o tótem en la tienda."
-		UI.Label(card, message, UDim2.new(1, -16, 1, -12), UDim2.new(0, 8, 0, 6), UI.Colors.Muted, false)
-	end
-	for _, gearId in ipairs(gearIds) do
-		order += 1
-		local gear = ShopConfig.Gear[gearId]
-		local card = UI.Card(listFrame, 74, order)
-		local gearIcon = FarmArt.CreateGearIcon(card, gearId, RarityConfig[gear.rarity].color)
-		gearIcon.Position = UDim2.fromOffset(8, 9)
-		UI.Label(card, gear.displayName .. "  x" .. gearCounts[gearId], UDim2.new(1, -182, 0, 24), UDim2.new(0, 68, 0, 5))
-		UI.Label(card, gear.description, UDim2.new(1, -182, 0, 34), UDim2.new(0, 68, 0, 31), UI.Colors.Muted, false)
-		local equipped = ClientState.EquippedGear[gearId] == true
-		local button = UI.Button(card, if gear.kind == "passive" then (if equipped then "Quitar" else "Equipar") else "Usar", UI.Colors.Blue, UDim2.new(0, 92, 0, 38), UDim2.new(1, -102, 0.5, -19))
-		button.TextSize = 11
+end
+
+local function makeTabs()
+	UI.ClearList(tabFrame)
+	for index, tab in ipairs(tabs2) do
+		local width = 1 / #tabs2
+		local button = UI.Button(tabFrame, TAB_ICONS[tab], if activeTab == tab then UI.Colors.Green else UI.Colors.Grey, UDim2.new(width, -4, 1, 0), UDim2.new((index - 1) * width, 2, 0, 0))
+		button.TextSize = 12
 		button.Activated:Connect(function()
-			local result = useGearFn:InvokeServer(gearId)
-			if result and result.success then
-				hud.Push(gear.kind == "passive" and (result.equipped and "Gear equipado" or "Gear retirado") or "Regadera usada en la planta más cercana", "good")
-			else
-				hud.Push("No se pudo usar: " .. tostring(result and result.reason or "error"), "warn")
+			if activeTab == tab then
+				return
+			end
+			activeTab = tab
+			selected = nil
+			render()
+			if tab == "Mascotas" then
+				task.spawn(refresh)
 			end
 		end)
 	end
@@ -794,7 +859,7 @@ local function addPetRows(order: number)
 				hud.Push("Incubadora desbloqueada en tu jardín", "good")
 				refresh()
 			else
-				hud.Push("No se pudo desbloquear: " .. tostring(result and result.reason or "error"), "warn")
+				hud.Fail(result and result.reason)
 			end
 		end)
 	end
@@ -841,7 +906,7 @@ local function addPetRows(order: number)
 				hud.Push("¡Nueva mascota: " .. result.displayName .. "!", "good")
 				task.defer(refresh)
 			else
-				hud.Push("No se pudo incubar: " .. tostring(result and result.reason or "error"), "warn")
+				hud.Fail(result and result.reason)
 			end
 		end)
 	end
@@ -894,41 +959,50 @@ local function addPetRows(order: number)
 				hud.Push("Mascota equipada", "good")
 				task.defer(refresh)
 			else
-				hud.Push("No se pudo equipar: " .. tostring(result and result.reason or "error"), "warn")
+				hud.Fail(result and result.reason)
 			end
 		end)
 	end
 end
 
+
 render = function()
-	if not listFrame then
+	if not listFrame or not listFrame.Parent then
 		return
 	end
+	makeTabs()
 	UI.ClearList(listFrame)
-	makeTabBar()
-	makeSearchBar()
-	local order = 0
-	if stats then
-		order += 1
-		local card = UI.Card(listFrame, 40, order)
-		UI.Label(
-			card,
-			string.format("Claimed %d · Stolen %d · Lost %d", stats.plantsHarvested, stats.plantsStolen, stats.plantsLost),
-			UDim2.new(1, -16, 1, -10),
-			UDim2.new(0, 8, 0, 5),
-			UI.Colors.Muted,
-			false
-		)
+	if activeTab == "Mascotas" then
+		UI.UseList(listFrame, 8)
+		detailFrame.Visible = false
+		listFrame.Size = UDim2.new(1, -16, 1, -112)
+		addPetRows(0)
+		return
 	end
-	if activeTab == "Semillas" then
-		addSeedRows(order)
-	elseif activeTab == "Plantas" then
-		addPlantRows(order)
-	elseif activeTab == "Gear" then
-		addGearRows(order)
-	elseif activeTab == "Mascotas" then
-		addPetRows(order)
+	detailFrame.Visible = true
+	listFrame.Size = UDim2.new(1, -16, 1, -112 - 84)
+	UI.UseGrid(listFrame, Vector2.new(74, 82), 6)
+	-- Si lo seleccionado ya no existe (vendido, plantado...) se deselecciona.
+	if selected then
+		local sel = selected
+		local exists = false
+		if sel.kind == "seed" then
+			exists = (ClientState.Inventory.seeds[sel.id] or 0) > 0
+		elseif sel.kind == "pack" then
+			exists = (ClientState.Inventory.seedPacks[sel.id] or 0) > 0
+		elseif sel.kind == "plant" or sel.kind == "placed" then
+			exists = findPlantByUid(sel.id) ~= nil
+		elseif sel.kind == "gear" then
+			exists = ((ClientState.Inventory.gear or {})[sel.id] or 0) > 0
+		elseif sel.kind == "stick" then
+			exists = true
+		end
+		if not exists then
+			selected = nil
+		end
 	end
+	fillTiles()
+	showDetail()
 end
 
 refresh = function()
@@ -940,15 +1014,67 @@ refresh = function()
 		incubatorUnlocked = snapshot.incubatorUnlocked == true
 		stats = snapshot.stats
 	end
-	render()
+	if hud.IsPanelOpen("Bag") then
+		render()
+	end
 end
 
 function InventoryController.Init(hudController: any)
 	hud = hudController
-	local _, list = hud.CreatePanel("Bag", "Mochila · º", refresh)
+	-- Se abre al instante con lo que ya sabe el cliente (el servidor lo empuja
+	-- con InventoryUpdated); no espera ninguna llamada de red.
+	local frame, list = hud.CreatePanel("Bag", "Mochila", function()
+		Hotbar.SetEditMode(true)
+		render()
+	end)
+	bagFrame = frame
 	listFrame = list
+	frame:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not frame.Visible then
+			Hotbar.SetEditMode(false)
+			endDrag()
+		end
+	end)
 
-	local button = hud.CreateActionButton("BagButton", "INV", "Mochila")
+	tabFrame = Instance.new("Frame")
+	tabFrame.Name = "Tabs"
+	tabFrame.BackgroundTransparency = 1
+	tabFrame.Position = UDim2.new(0, 8, 0, 62)
+	tabFrame.Size = UDim2.new(1, -16, 0, 36)
+	tabFrame.ZIndex = frame.ZIndex + 2
+	tabFrame.Parent = frame
+
+	list.Position = UDim2.new(0, 8, 0, 104)
+
+	detailFrame = Instance.new("Frame")
+	detailFrame.Name = "Detail"
+	detailFrame.AnchorPoint = Vector2.new(0, 1)
+	detailFrame.Position = UDim2.new(0, 8, 1, -8)
+	detailFrame.Size = UDim2.new(1, -16, 0, 76)
+	detailFrame.BackgroundColor3 = UI.Colors.Card
+	detailFrame.BorderSizePixel = 3
+	detailFrame.BorderColor3 = Color3.fromRGB(112, 78, 43)
+	detailFrame.ZIndex = frame.ZIndex + 2
+	detailFrame.Parent = frame
+	detailTitle = UI.Label(detailFrame, "", UDim2.new(1, -12, 0, 22), UDim2.new(0, 8, 0, 3), UI.Colors.Text, true)
+	detailTitle.TextTruncate = Enum.TextTruncate.AtEnd
+	detailSub = UI.Label(detailFrame, "", UDim2.new(1, -12, 0, 18), UDim2.new(0, 8, 0, 25), UI.Colors.Muted, false)
+	detailSub.TextScaled = false
+	detailSub.TextSize = 12
+	detailSub.TextTruncate = Enum.TextTruncate.AtEnd
+	detailButtons = Instance.new("Frame")
+	detailButtons.BackgroundTransparency = 1
+	detailButtons.Position = UDim2.new(0, 8, 1, -38)
+	detailButtons.Size = UDim2.new(1, -16, 0, 34)
+	detailButtons.ZIndex = detailFrame.ZIndex + 1
+	detailButtons.Parent = detailFrame
+	local buttonLayout = Instance.new("UIListLayout")
+	buttonLayout.FillDirection = Enum.FillDirection.Horizontal
+	buttonLayout.Padding = UDim.new(0, 6)
+	buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	buttonLayout.Parent = detailButtons
+
+	local button = hud.CreateActionButton("BagButton", "🎒", "Mochila")
 	local gameplayContext = ReplicatedStorage:WaitForChild("Inputs"):WaitForChild("GameplayContext")
 	local toggleInventory = gameplayContext:WaitForChild("ToggleInventory") :: InputAction
 	local buttonBinding = Instance.new("InputBinding")
@@ -963,19 +1089,27 @@ function InventoryController.Init(hudController: any)
 		end
 		activeTab = "Mascotas"
 		if hud.IsPanelOpen("Bag") then
-			refresh()
+			render()
+			task.spawn(refresh)
 		else
 			hud.TogglePanel("Bag")
+			task.spawn(refresh)
 		end
 	end)
 	Net.GetRemoteEvent("InventoryUpdated").OnClientEvent:Connect(function(inventory: any, placedPlants: any, equippedGear: any)
 		ClientState.SetInventoryFromSnapshot(inventory)
 		ClientState.PlacedPlants = placedPlants or ClientState.PlacedPlants
 		ClientState.EquippedGear = equippedGear or ClientState.EquippedGear
+		-- Si la planta que se iba a colocar ya no está (vendida, regalada), se cancela.
+		if pendingPlantPlacementUid and not findPlantByUid(pendingPlantPlacementUid) then
+			InventoryController.CancelPlacementSilently()
+		end
 		if hud.IsPanelOpen("Bag") then
 			render()
 		end
 	end)
+	-- Estado inicial (incubadora, estadísticas) sin bloquear la apertura.
+	task.spawn(refresh)
 end
 
 return InventoryController

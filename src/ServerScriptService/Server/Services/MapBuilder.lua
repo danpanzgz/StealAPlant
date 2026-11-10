@@ -14,7 +14,6 @@ local StarterPlayer = game:GetService("StarterPlayer")
 local Workspace = game:GetService("Workspace")
 
 local GardenConfig = require(ReplicatedStorage.Shared.Config.GardenConfig)
-local ZoneConfig = require(ReplicatedStorage.Shared.Config.ZoneConfig)
 
 local MapBuilder = {}
 
@@ -129,7 +128,40 @@ local function buildFarmer(parent: Instance, name: string, position: Vector3, co
 	part(farmer, "HandRight", Vector3.new(0.48, 0.85, 0.48), position + Vector3.new(1.1, 2, 1.05), Color3.fromRGB(238, 190, 144))
 end
 
-local function buildShop(parent: Instance, position: Vector3, shopType: string, title: string, roofColor: Color3, coatColor: Color3)
+local function buildSign(parent: Instance, position: Vector3, title: string, subtitle: string, accent: Color3)
+	-- Cartel de madera sobre el tejado: cara frontal (-Z) hacia donde está el cliente.
+	local woodDark = Color3.fromRGB(92, 60, 36)
+	local board = part(parent, "ShopSign", Vector3.new(11, 3.2, 0.5), position, Color3.fromRGB(150, 105, 65), Enum.Material.WoodPlanks)
+	part(parent, "ShopSignFrame", Vector3.new(11.6, 3.8, 0.4), position + Vector3.new(0, 0, 0.2), woodDark, Enum.Material.Wood)
+	for _, dx in ipairs({ -4.6, 4.6 }) do
+		part(parent, "ShopSignPost", Vector3.new(0.5, 2, 0.5), position + Vector3.new(dx, -2.4, 0.2), woodDark, Enum.Material.Wood)
+	end
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 50
+	gui.Parent = board
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Size = UDim2.new(1, 0, 0.62, 0)
+	titleLabel.Position = UDim2.new(0, 0, 0.04, 0)
+	titleLabel.Font = Enum.Font.GothamBlack
+	titleLabel.TextScaled = true
+	titleLabel.Text = title
+	titleLabel.TextColor3 = Color3.fromRGB(255, 240, 200)
+	titleLabel.Parent = gui
+	local sub = Instance.new("TextLabel")
+	sub.BackgroundTransparency = 1
+	sub.Size = UDim2.new(1, 0, 0.28, 0)
+	sub.Position = UDim2.new(0, 0, 0.68, 0)
+	sub.Font = Enum.Font.GothamMedium
+	sub.TextScaled = true
+	sub.Text = subtitle
+	sub.TextColor3 = accent
+	sub.Parent = gui
+end
+
+local function buildShop(parent: Instance, position: Vector3, shopType: string, title: string, subtitle: string, roofColor: Color3, coatColor: Color3)
 	local wood = Color3.fromRGB(150, 105, 65)
 	local stall = Instance.new("Model")
 	stall.Name = shopType .. "Shop"
@@ -153,13 +185,16 @@ local function buildShop(parent: Instance, position: Vector3, shopType: string, 
 			Color3.fromRGB(248, 239, 201)
 		)
 	end
-	billboard(counter, title, UDim2.fromOffset(170, 34), Vector3.new(0, 6, 0), 45)
+	buildSign(stall, position + Vector3.new(0, 10, -4.6), title, subtitle, roofColor:Lerp(Color3.new(1, 1, 1), 0.45))
 	buildFarmer(stall, shopType .. "Farmer", position, coatColor, roofColor)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "ShopPrompt"
 	prompt:SetAttribute("ShopType", shopType)
-	prompt.ActionText = "Open Shop"
+	if shopType == "Sell" then
+		prompt.Name = "SellPrompt"
+	end
+	prompt.ActionText = if shopType == "Sell" then "Vender" else "Comprar"
 	prompt.ObjectText = title
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 14
@@ -282,7 +317,7 @@ function MapBuilder.BuildWorld()
 	atmosphere.Offset = 0.3
 	atmosphere.Color = Color3.fromRGB(255, 190, 160)
 	atmosphere.Decay = Color3.fromRGB(190, 100, 150)
-	atmosphere.Glare = 0.7
+	atmosphere.Glare = 0 -- el brillo redondo del Atmosphere se mezclaba con el sol cuadrado
 	atmosphere.Haze = 1.4
 
 	local bloom = ensure("BloomEffect", "SunsetBloom") :: BloomEffect
@@ -291,7 +326,7 @@ function MapBuilder.BuildWorld()
 	bloom.Threshold = 1.1
 
 	local rays = ensure("SunRaysEffect", "SunsetRays") :: SunRaysEffect
-	rays.Intensity = 0.1
+	rays.Intensity = 0 -- los rayos radiales redondean el sol cuadrado
 	rays.Spread = 0.8
 
 	local grade = ensure("ColorCorrectionEffect", "SunsetGrade") :: ColorCorrectionEffect
@@ -387,7 +422,7 @@ function MapBuilder.BuildWorld()
 	local roadWidth = GardenConfig.StreetWidth - 4
 	part(map, "StreetEdge", Vector3.new(streetMaxX - streetMinX, 0.22, GardenConfig.StreetWidth), Vector3.new(C.X, 0.11, C.Z), Color3.fromRGB(162, 177, 133), Enum.Material.Slate)
 	part(map, "StreetRoad", Vector3.new(streetMaxX - streetMinX - 2, 0.26, roadWidth), Vector3.new(C.X, 0.14, C.Z), COBBLE, Enum.Material.Cobblestone)
-	-- Caminos a las dos puertas de cada jardín (empedrado hasta la calle).
+	-- Camino a la única puerta de cada jardín (la que da a la calle).
 	for column = 0, GardenConfig.GardensPerRow - 1 do
 		local gateX = column * GardenConfig.GardenSlotSpacing + 15
 		part(map, "GatePathSouth", Vector3.new(12, 0.2, 5), Vector3.new(gateX, 0.12, southBackZ + 4.5), COBBLE, Enum.Material.Cobblestone)
@@ -400,16 +435,16 @@ function MapBuilder.BuildWorld()
 	part(map, "PlazaInset", Vector3.new(66, 0.12, roadWidth - 18), Vector3.new(C.X, 0.5, C.Z), Color3.fromRGB(241, 230, 199), Enum.Material.SmoothPlastic)
 
 	-- Mercado: las tres tiendas en fila sobre el eje de la calle (frente al sur).
-	buildShop(map, C + Vector3.new(-24, 0, 0), "Seeds", "SEED FARMER", Color3.fromRGB(102, 171, 83), Color3.fromRGB(114, 166, 87))
-	buildShop(map, C + Vector3.new(0, 0, 0), "Gear", "GEAR FARMER", Color3.fromRGB(93, 147, 202), Color3.fromRGB(102, 130, 168))
-	buildShop(map, C + Vector3.new(24, 0, 0), "Pets", "EGG FARMER", Color3.fromRGB(165, 119, 205), Color3.fromRGB(151, 110, 176))
+	buildShop(map, C + Vector3.new(-36, 0, 0), "Seeds", "🌱 SEMILLAS", "Packs de semillas", Color3.fromRGB(102, 171, 83), Color3.fromRGB(114, 166, 87))
+	buildShop(map, C + Vector3.new(-12, 0, 0), "Gear", "🧰 HERRAMIENTAS", "Regaderas y más", Color3.fromRGB(93, 147, 202), Color3.fromRGB(102, 130, 168))
+	buildShop(map, C + Vector3.new(12, 0, 0), "Pets", "🥚 HUEVOS", "Mascotas", Color3.fromRGB(165, 119, 205), Color3.fromRGB(151, 110, 176))
+	buildShop(map, C + Vector3.new(36, 0, 0), "Sell", "💰 VENTA", "Vende tus plantas", Color3.fromRGB(226, 160, 52), Color3.fromRGB(196, 140, 60))
 
 	-- Fuentes a ambos lados del mercado y parterres con flores.
 	buildFountain(map, C + Vector3.new(-50, 0, 0))
 	buildFountain(map, C + Vector3.new(50, 0, 0))
-	for index, offset in ipairs({
-		Vector3.new(-12, 0, 9), Vector3.new(12, 0, 9), Vector3.new(-12, 0, -9), Vector3.new(12, 0, -9),
-	}) do
+	-- (Al norte del mercado va el podio del ranking; solo parterres al sur.)
+	for index, offset in ipairs({ Vector3.new(-24, 0, -9), Vector3.new(24, 0, -9), Vector3.new(0, 0, -11) }) do
 		local bed = C + offset
 		part(map, "PlazaFlowerBed", Vector3.new(9, 0.8, 4), bed + Vector3.new(0, 0.5, 0), Color3.fromRGB(90, 150, 80), Enum.Material.Grass)
 		for flower = 1, 3 do
@@ -420,16 +455,6 @@ function MapBuilder.BuildWorld()
 	for _, dx in ipairs({ -34, 34 }) do
 		buildBench(map, C + Vector3.new(dx, 0.6, 12), 0)
 		buildBench(map, C + Vector3.new(dx, 0.6, -12), 180)
-	end
-
-	-- Carteles de zona, delante de las tiendas.
-	for i, zoneId in ipairs(ZoneConfig.Order) do
-		local zone = ZoneConfig[zoneId]
-		local pos = C + Vector3.new((i - 2) * 13, 0, -13)
-		part(map, "SignPost", Vector3.new(0.8, 5, 0.8), pos + Vector3.new(0, 2.5, 0), Color3.fromRGB(120, 85, 55), Enum.Material.Wood)
-		local board = part(map, "ZoneSign_" .. zoneId, Vector3.new(8, 3.4, 0.6), pos + Vector3.new(0, 5.5, 0), Color3.fromRGB(95, 160, 220))
-		local req = zone.unlockCash > 0 and ("🔒 $" .. zone.unlockCash .. " ganados") or "✅ Libre"
-		billboard(board, "Zona " .. zone.order .. "\n" .. zone.displayName .. "\n" .. req, UDim2.fromOffset(130, 34), Vector3.new(0, 0, 0), 32)
 	end
 
 	-- Spawn de la plaza (por defecto; cada jugador aparece en su jardín).

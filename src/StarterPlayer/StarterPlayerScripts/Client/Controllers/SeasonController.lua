@@ -92,22 +92,47 @@ local function claim(level: any, track: string?)
 	render()
 end
 
-local function addTrackRow(card: Frame, y: number, label: string, reward: any, level: number, track: string, claimed: boolean, unlocked: boolean, locked: boolean)
-	UI.Label(card, label .. rewardText(reward), UDim2.new(1, -120, 0, 20), UDim2.new(0, 12, 0, y), if locked then UI.Colors.Muted else UI.Colors.Text, false)
-	local text = if claimed then "✔" elseif locked then "🔒" elseif unlocked then "Reclamar" else "…"
+local function promptPass()
+	local pass = MonetizationConfig.GamePasses.SeasonPass
+	if pass.id == 0 then
+		hud.Push("⚙️ Configura el ID del Pase en MonetizationConfig", "warn")
+	else
+		MarketplaceService:PromptGamePassPurchase(player, pass.id)
+	end
+end
+
+-- Una pista (gratis o premium) dentro de la tarjeta de un nivel.
+local function addTrack(card: Frame, y: number, height: number, icon: string, reward: any, level: number, track: string, claimed: boolean, unlocked: boolean, locked: boolean)
+	local box = Instance.new("Frame")
+	box.Size = UDim2.new(1, -12, 0, height)
+	box.Position = UDim2.new(0, 6, 0, y)
+	box.BackgroundColor3 = if track == "premium" then Color3.fromRGB(235, 218, 255) else Color3.fromRGB(226, 238, 205)
+	box.BorderSizePixel = 0
+	box.ZIndex = card.ZIndex + 1
+	box.Parent = card
+	UI.Round(box, 8)
+	local title = UI.Label(box, icon, UDim2.new(1, -8, 0, 18), UDim2.new(0, 4, 0, 2), UI.Colors.Muted, true)
+	title.TextXAlignment = Enum.TextXAlignment.Center
+	local text = UI.Label(box, rewardText(reward), UDim2.new(1, -10, 0, height - 56), UDim2.new(0, 5, 0, 20), if locked then UI.Colors.Muted else UI.Colors.Text, false)
+	text.TextWrapped = true
+	text.TextScaled = false
+	text.TextSize = 12
+	text.TextYAlignment = Enum.TextYAlignment.Top
+	text.TextXAlignment = Enum.TextXAlignment.Center
+	local label = if claimed then "✔" elseif locked then "🔒" elseif unlocked then "Reclamar" else "…"
 	local color = if unlocked and not claimed and not locked then UI.Colors.Green else UI.Colors.Grey
-	local button = UI.Button(card, text, color, UDim2.new(0, 90, 0, 30), UDim2.new(1, -100, 0, y - 4))
+	local button = UI.Button(box, label, color, UDim2.new(1, -12, 0, 30), UDim2.new(0, 6, 1, -34))
+	button.TextSize = 13
 	button.Activated:Connect(function()
-		if claimed or not unlocked then
+		if claimed then
 			return
 		end
 		if locked then
-			local pass = MonetizationConfig.GamePasses.SeasonPass
-			if pass.id == 0 then
-				hud.Push("⚙️ Configura el ID del Pase en MonetizationConfig", "warn")
-			else
-				MarketplaceService:PromptGamePassPurchase(player, pass.id)
-			end
+			promptPass()
+			return
+		end
+		if not unlocked then
+			hud.Push("Sube de nivel para reclamarlo", "info")
 			return
 		end
 		button.Active = false
@@ -115,61 +140,64 @@ local function addTrackRow(card: Frame, y: number, label: string, reward: any, l
 	end)
 end
 
+local headFrame: Frame
+
 function render()
 	UI.ClearList(listFrame)
+	UI.ClearList(headFrame)
 	if not status then
 		return
 	end
 
-	local head = UI.Card(listFrame, 118, 1)
-	UI.Label(head, "🏆 " .. status.name .. " #" .. status.season, UDim2.new(1, -16, 0, 24), UDim2.new(0, 12, 0, 6), UI.Colors.Gold)
-	UI.Label(head, "Nivel " .. status.level .. "/" .. status.maxLevel .. " · termina en " .. UI.Time(status.endsIn), UDim2.new(1, -16, 0, 18), UDim2.new(0, 12, 0, 32), UI.Colors.Text, false)
+	UI.Label(headFrame, "🏆 " .. status.name .. " #" .. status.season, UDim2.new(1, -170, 0, 24), UDim2.new(0, 10, 0, 4), UI.Colors.Gold)
+	UI.Label(headFrame, "Nivel " .. status.level .. "/" .. status.maxLevel .. " · termina en " .. UI.Time(status.endsIn), UDim2.new(1, -170, 0, 18), UDim2.new(0, 10, 0, 28), UI.Colors.Text, false)
 	local barBg = Instance.new("Frame")
-	barBg.Size = UDim2.new(1, -24, 0, 14)
-	barBg.Position = UDim2.new(0, 12, 0, 56)
+	barBg.Size = UDim2.new(1, -20, 0, 14)
+	barBg.Position = UDim2.new(0, 10, 0, 52)
 	barBg.BackgroundColor3 = UI.Colors.Grey
 	barBg.BorderSizePixel = 0
-	barBg.Parent = head
+	barBg.ZIndex = headFrame.ZIndex + 1
+	barBg.Parent = headFrame
 	UI.Round(barBg, 7)
 	local fill = Instance.new("Frame")
 	local ratio = if status.xpNeed > 0 then status.xpInto / status.xpNeed else 1
 	fill.Size = UDim2.new(math.clamp(ratio, 0, 1), 0, 1, 0)
 	fill.BackgroundColor3 = UI.Colors.Gold
 	fill.BorderSizePixel = 0
+	fill.ZIndex = barBg.ZIndex + 1
 	fill.Parent = barBg
 	UI.Round(fill, 7)
 	local xpText = if status.xpNeed > 0 then (status.xpInto .. " / " .. status.xpNeed .. " XP") else "¡Nivel máximo!"
-	UI.Label(head, xpText, UDim2.new(1, -150, 0, 18), UDim2.new(0, 12, 0, 80), UI.Colors.Muted, false)
+	UI.Label(headFrame, xpText, UDim2.new(0.5, 0, 0, 18), UDim2.new(0, 10, 0, 70), UI.Colors.Muted, false)
 
 	local count = claimableCount()
 	if count > 0 then
-		local all = UI.Button(head, "Reclamar todo (" .. count .. ")", UI.Colors.Green, UDim2.new(0, 130, 0, 30), UDim2.new(1, -142, 1, -38))
+		local all = UI.Button(headFrame, "Reclamar (" .. count .. ")", UI.Colors.Green, UDim2.new(0, 150, 0, 32), UDim2.new(1, -160, 0, 6))
 		all.Activated:Connect(function()
 			all.Active = false
 			claim("all", nil)
 		end)
-	end
-	if not status.hasPass then
-		local buy = UI.Button(listFrame, "Desbloquear pista premium · R$ " .. MonetizationConfig.GamePasses.SeasonPass.robux, UI.Colors.Blue, UDim2.new(1, -8, 0, 44), UDim2.new(0, 0, 0, 0))
-		buy.LayoutOrder = 2
-		buy.Activated:Connect(function()
-			local pass = MonetizationConfig.GamePasses.SeasonPass
-			if pass.id == 0 then
-				hud.Push("⚙️ Configura el ID del Pase en MonetizationConfig", "warn")
-			else
-				MarketplaceService:PromptGamePassPurchase(player, pass.id)
-			end
-		end)
+	elseif not status.hasPass then
+		local buy = UI.Button(headFrame, "⭐ Premium R$ " .. MonetizationConfig.GamePasses.SeasonPass.robux, UI.Colors.Blue, UDim2.new(0, 150, 0, 32), UDim2.new(1, -160, 0, 6))
+		buy.TextSize = 12
+		buy.Activated:Connect(promptPass)
 	end
 
+	-- Niveles de lado a lado: se desliza horizontalmente.
 	for level = 1, status.maxLevel do
 		local key = tostring(level)
 		local unlocked = level <= status.level
-		local card = UI.Card(listFrame, 92, 10 + level)
-		UI.Label(card, "Nivel " .. level .. (if unlocked then "  ✅" else ""), UDim2.new(1, -16, 0, 20), UDim2.new(0, 12, 0, 4), if unlocked then UI.Colors.Gold else UI.Colors.Muted)
-		addTrackRow(card, 30, "🆓 ", status.freeRewards[level], level, "free", status.free[key] == true, unlocked, false)
-		addTrackRow(card, 62, "⭐ ", status.premiumRewards[level], level, "premium", status.premium[key] == true, unlocked, not status.hasPass)
+		local card = UI.Card(listFrame, 230, level)
+		card.Size = UDim2.fromOffset(132, 230)
+		card.BorderColor3 = if level == status.level then UI.Colors.Gold else Color3.fromRGB(112, 78, 43)
+		local head = UI.Label(card, "Nivel " .. level .. (if unlocked then " ✅" else ""), UDim2.new(1, -8, 0, 20), UDim2.new(0, 4, 0, 4), if unlocked then UI.Colors.Gold else UI.Colors.Muted, true)
+		head.TextXAlignment = Enum.TextXAlignment.Center
+		addTrack(card, 28, 94, "🆓 GRATIS", status.freeRewards[level], level, "free", status.free[key] == true, unlocked, false)
+		addTrack(card, 128, 98, "⭐ PREMIUM", status.premiumRewards[level], level, "premium", status.premium[key] == true, unlocked, not status.hasPass)
 	end
+	task.defer(function()
+		listFrame.CanvasPosition = Vector2.new(math.max(0, (status.level - 2) * 140), 0)
+	end)
 end
 
 local function refresh()
@@ -183,8 +211,22 @@ end
 
 function SeasonController.Init(hudController: any)
 	hud = hudController
-	local _, list = hud.CreatePanel("Season", "Pase de Temporada", refresh)
+	local frame, list = hud.CreatePanel("Season", "Pase de Temporada", refresh)
 	listFrame = list
+	headFrame = Instance.new("Frame")
+	headFrame.Name = "SeasonHead"
+	headFrame.BackgroundColor3 = UI.Colors.Card
+	headFrame.BorderSizePixel = 3
+	headFrame.BorderColor3 = Color3.fromRGB(112, 78, 43)
+	headFrame.Position = UDim2.new(0, 8, 0, 62)
+	headFrame.Size = UDim2.new(1, -16, 0, 96)
+	headFrame.ZIndex = frame.ZIndex + 2
+	headFrame.Parent = frame
+	UI.UseRow(list, 8)
+	list.Position = UDim2.new(0, 8, 0, 168)
+	list.Size = UDim2.new(1, -16, 1, -176)
+	list.ScrollingDirection = Enum.ScrollingDirection.XY
+	list.AutomaticCanvasSize = Enum.AutomaticSize.XY
 
 	local button = hud.CreateActionButton("SeasonButton", "🏆", "Temporada")
 	button.Activated:Connect(function()

@@ -2,7 +2,7 @@
 --[[
 	LeaderboardService.lua
 	  - leaderstats (Cash / Stolen) para la lista nativa de jugadores.
-	  - Top global por Cash total ganado usando un OrderedDataStore
+	  - Top global por dinero total acumulado (stats.lifetimeCash) usando un OrderedDataStore
 	    (si falla o Studio no tiene API habilitada, cae al top del servidor).
 ]]
 
@@ -13,7 +13,7 @@ local DataService = require(script.Parent.DataService)
 
 local LeaderboardService = {}
 
-local orderedStore = DataStoreService:GetOrderedDataStore("StealAPlant_TotalCash_v1")
+local orderedStore = DataStoreService:GetOrderedDataStore("StealAPlant_LifetimeCash_v2")
 
 local STATS_REFRESH = 3 -- seg: refresco de leaderstats
 local PUBLISH_INTERVAL = 60 -- seg: subida al OrderedDataStore
@@ -64,7 +64,7 @@ local function serverTop(): { any }
 	for _, player in ipairs(Players:GetPlayers()) do
 		local profile = DataService.GetProfile(player)
 		if profile then
-			table.insert(list, { name = player.DisplayName, score = math.floor(profile.totalCashEarned) })
+			table.insert(list, { name = player.DisplayName, userId = player.UserId, score = math.floor(profile.stats.lifetimeCash or 0) })
 		end
 	end
 	table.sort(list, function(a, b)
@@ -82,7 +82,7 @@ function LeaderboardService.GetTop(): (any, string)
 	end
 
 	local ok, page = pcall(function()
-		return orderedStore:GetSortedAsync(false, 10):GetCurrentPage()
+		return orderedStore:GetSortedAsync(false, 50):GetCurrentPage()
 	end)
 
 	local entries
@@ -90,7 +90,8 @@ function LeaderboardService.GetTop(): (any, string)
 	if ok and #page > 0 then
 		entries = {}
 		for i, item in ipairs(page) do
-			table.insert(entries, { rank = i, name = getName(tonumber(item.key) or 0), score = item.value })
+			local userId = tonumber(item.key) or 0
+			table.insert(entries, { rank = i, userId = userId, name = getName(userId), score = item.value })
 		end
 	else
 		entries = serverTop()
@@ -115,7 +116,7 @@ function LeaderboardService.Init()
 					if profile and DataService.IsLoaded(player) then
 						task.spawn(function()
 							pcall(function()
-								orderedStore:SetAsync(tostring(player.UserId), math.floor(profile.totalCashEarned))
+								orderedStore:SetAsync(tostring(player.UserId), math.floor(profile.stats.lifetimeCash or 0))
 							end)
 						end)
 					end

@@ -62,7 +62,7 @@ local function render()
 				render()
 			else
 				local reason = result and result.reason or "error"
-				hud.Push(REASONS[reason] or reason, "alarm")
+				hud.Fail(reason)
 			end
 		end)
 	else
@@ -100,7 +100,7 @@ local function render()
 				refresh()
 			else
 				local reason = result and result.reason or "error"
-				hud.Push(REASONS[reason] or reason, "alarm")
+				hud.Fail(reason)
 			end
 		end)
 	end
@@ -132,7 +132,7 @@ local function render()
 			render()
 		else
 			local reason = result and result.reason or "error"
-			hud.Push(REASONS[reason] or reason, "warn")
+			hud.Fail(reason)
 		end
 	end)
 

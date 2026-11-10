@@ -129,6 +129,112 @@ function UI.Card(parent: Instance, height: number, order: number?): Frame
 	return card
 end
 
+-- ===== Cuadrículas y filas =====
+
+local function stripLayouts(list: Instance)
+	for _, child in ipairs(list:GetChildren()) do
+		if child:IsA("UIListLayout") or child:IsA("UIGridLayout") then
+			child:Destroy()
+		end
+	end
+end
+
+-- Convierte una lista con scroll en una cuadrícula de cuadraditos (scroll vertical corto).
+function UI.UseGrid(list: ScrollingFrame, cell: Vector2, pad: number)
+	stripLayouts(list)
+	list.ScrollingDirection = Enum.ScrollingDirection.Y
+	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	list.CanvasSize = UDim2.new(0, 0, 0, 0)
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(cell.X, cell.Y)
+	grid.CellPadding = UDim2.fromOffset(pad, pad)
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	grid.Parent = list
+end
+
+-- Lista vertical clásica.
+function UI.UseList(list: ScrollingFrame, pad: number?)
+	stripLayouts(list)
+	list.ScrollingDirection = Enum.ScrollingDirection.Y
+	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	list.CanvasSize = UDim2.new(0, 0, 0, 0)
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, pad or 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Parent = list
+end
+
+-- Fila horizontal con scroll de lado a lado.
+function UI.UseRow(list: ScrollingFrame, pad: number?)
+	stripLayouts(list)
+	list.ScrollingDirection = Enum.ScrollingDirection.X
+	list.AutomaticCanvasSize = Enum.AutomaticSize.X
+	list.CanvasSize = UDim2.new(0, 0, 0, 0)
+	list.ScrollBarThickness = 8
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.Padding = UDim.new(0, pad or 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Parent = list
+end
+
+-- Cuadradito de cuadrícula (inventario, índice...). `icon` rellena el hueco central.
+export type TileOptions = {
+	order: number?,
+	title: string?,
+	count: number?,
+	color: Color3?, -- color del borde (rareza)
+	locked: boolean?,
+	selected: boolean?,
+	icon: ((holder: Frame) -> ())?,
+	text: string?, -- texto grande central si no hay icono (p. ej. "?")
+}
+
+function UI.Tile(parent: Instance, options: TileOptions): TextButton
+	local tile = Instance.new("TextButton")
+	tile.Text = ""
+	tile.AutoButtonColor = false
+	tile.LayoutOrder = options.order or 0
+	tile.BackgroundColor3 = if options.locked then Color3.fromRGB(170, 152, 114) else UI.Colors.Card
+	tile.BorderSizePixel = if options.selected then 4 else 3
+	tile.BorderColor3 = if options.selected then Color3.fromRGB(255, 255, 255) elseif options.color then options.color else Color3.fromRGB(112, 78, 43)
+	tile.ZIndex = if parent:IsA("GuiObject") then parent.ZIndex + 1 else 1
+	tile.Parent = parent
+	addGradient(tile, 0.12)
+
+	if options.icon then
+		local holder = Instance.new("Frame")
+		holder.Name = "IconHolder"
+		holder.BackgroundTransparency = 1
+		holder.Size = UDim2.fromOffset(52, 56)
+		holder.AnchorPoint = Vector2.new(0.5, 0)
+		holder.Position = UDim2.new(0.5, 0, 0, 3)
+		holder.ZIndex = tile.ZIndex + 1
+		holder.Parent = tile
+		options.icon(holder)
+	elseif options.text then
+		local mark = UI.Label(tile, options.text, UDim2.new(1, 0, 0.6, 0), UDim2.new(0, 0, 0, 2), UI.Colors.Muted)
+		mark.TextXAlignment = Enum.TextXAlignment.Center
+	end
+	if options.title then
+		local name = UI.Label(tile, options.title, UDim2.new(1, -4, 0, 15), UDim2.new(0, 2, 1, -17), UI.Colors.Text, false)
+		name.TextXAlignment = Enum.TextXAlignment.Center
+		name.TextTruncate = Enum.TextTruncate.AtEnd
+		name.TextScaled = false
+		name.TextSize = 11
+	end
+	if options.count and options.count > 1 then
+		local count = UI.Label(tile, "x" .. options.count, UDim2.new(0, 34, 0, 16), UDim2.new(1, -36, 0, 1), UI.Colors.Text)
+		count.TextXAlignment = Enum.TextXAlignment.Right
+		count.TextScaled = false
+		count.TextSize = 13
+	end
+	return tile
+end
+
 function UI.ClearList(list: Instance)
 	for _, child in ipairs(list:GetChildren()) do
 		if child:IsA("GuiObject") then

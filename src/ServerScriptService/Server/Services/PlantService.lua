@@ -18,6 +18,7 @@ local RarityConfig = require(ReplicatedStorage.Shared.Config.RarityConfig)
 local MutationConfig = require(ReplicatedStorage.Shared.Config.MutationConfig)
 local PlantInstanceConfig = require(ReplicatedStorage.Shared.Config.PlantInstanceConfig)
 local ShopConfig = require(ReplicatedStorage.Shared.Config.ShopConfig)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local PlantModels = require(ReplicatedStorage.Shared.Modules.PlantModels)
 local MutationUtil = require(ReplicatedStorage.Shared.Modules.MutationUtil)
 local MutationVisuals = require(ReplicatedStorage.Shared.Modules.MutationVisuals)
@@ -87,12 +88,13 @@ local function rollMutations(player: Player): { string }
 	if profile and profile.equippedGear and profile.equippedGear.MutationTotem then
 		luck *= ShopConfig.Gear.MutationTotem.mutationLuck
 	end
+	luck *= RebirthConfig.Luck(if profile then (profile.rebirthCount or 0) else 0)
 	local result: { string } = {}
 	for _, mutationId in ipairs(MutationConfig.Order) do
 		local data = MutationConfig[mutationId]
 		local allowed = data.weatherTag == nil or EventService.IsWeatherActive(data.weatherTag)
 		if allowed then
-			local chance = data.chance * EventService.GetMutationMultiplier(data.weatherTag) * luck
+			local chance = math.min(0.6, data.chance * EventService.GetMutationMultiplier(data.weatherTag) * luck)
 			if math.random() < chance then
 				table.insert(result, mutationId)
 			end
@@ -140,6 +142,7 @@ local function rollSize(player: Player): string
 	local profile = DataService.GetProfile(player)
 	local sizeLuck = profile and profile.equippedGear and profile.equippedGear.SizeTotem
 		and ShopConfig.Gear.SizeTotem.sizeLuck or 1
+	sizeLuck *= RebirthConfig.Luck(if profile then (profile.rebirthCount or 0) else 0)
 	for _, sizeId in ipairs(PlantInstanceConfig.SizeOrder) do
 		local weight = PlantInstanceConfig.Sizes[sizeId].weight
 		if sizeId ~= "Normal" then
@@ -328,7 +331,7 @@ local function refreshPlot(player: Player, plotIndex: number, plotPart: BasePart
 		clearPlantVisual(plotPart)
 		plotPart:SetAttribute("Stealable", false)
 		if prompt then
-			updatePrompt(prompt, "Plant", "Empty Plot", true)
+			updatePrompt(prompt, "Plant", "Empty Plot", false) -- los huecos vacíos no se ven ni tienen prompt
 		end
 		return
 	end
@@ -413,6 +416,10 @@ function PlantService.PlantSeed(player: Player, plotIndex: number | Vector3, pla
 		if not root or (root.Position - yardPosition).Magnitude > 18 then
 			return false, "too_far_from_plot"
 		end
+		local usedPlots, maxPlots = GardenService.GetPlotUsage(player)
+		if usedPlots >= maxPlots then
+			return false, "garden_full"
+		end
 		GardenService.EnsureAvailablePlot(player)
 		local placedIndex = GardenService.PlaceEmptyPlotAt(player, plotIndex)
 		if not placedIndex then
@@ -443,7 +450,10 @@ function PlantService.PlantSeed(player: Player, plotIndex: number | Vector3, pla
 	local sizeId = rollSize(player)
 	local sizeData = PlantInstanceConfig.Sizes[sizeId]
 	local baseWeight = math.sqrt(plantData.baseSellValue) * 0.45
+	local gardenModelForPos = GardenService.GetGardenModel(player)
+	local localPos = if gardenModelForPos then plotPart.Position - gardenModelForPos:GetPivot().Position else Vector3.zero
 	profile.plots[plotIndex] = {
+		pos = { x = localPos.X, z = localPos.Z },
 		plantId = plantId,
 		plantedAt = os.time(),
 		mutations = rollMutations(player),
@@ -452,12 +462,12 @@ function PlantService.PlantSeed(player: Player, plotIndex: number | Vector3, pla
 		growthMultiplier = (if profile.equippedGear and profile.equippedGear.Sprinkler then ShopConfig.Gear.Sprinkler.growthMultiplier else 1)
 			* MonetizationService.GetGrowthMultiplier(player),
 	}
+	profile.stats.plantsPlanted = (profile.stats.plantsPlanted or 0) + 1
 	DataService.MarkDirty(player)
 	InventoryService.Push(player)
 	QuestService.Report(player, "plant", 1)
 
 	PlantService.RefreshPlot(player, plotIndex)
-	GardenService.EnsureAvailablePlot(player)
 	growthUpdatedEvent:FireClient(player, { plotIndex = plotIndex, plantId = plantId, stage = 1 })
 	plantedEvent:FireClient(player, {
 		plotIndex = plotIndex,
@@ -648,7 +658,6 @@ local function rebuildPlacedPlants(player: Player)
 	local folder = Instance.new("Folder")
 	folder.Name = "CollectionPlants"
 	folder.Parent = garden
-	GardenService.ExpandGardenForPlants(player, #profile.placedPlants)
 	for slot, plant in ipairs(profile.placedPlants) do
 		buildCollectionPlantVisual(player, plant, folder, slot)
 	end
@@ -701,7 +710,6 @@ function PlantService.PlaceCollectionPlant(player: Player, plantUid: string, req
 	end
 	local capacity = PlantInstanceConfig.PlaceCapacityBase
 		+ (profile.rebirthCount or 0) * PlantInstanceConfig.PlaceCapacityPerRebirth
-		+ MonetizationService.GetExtraPlaceSlots(player)
 	if #profile.placedPlants >= capacity then
 		return false, "plant_capacity_reached"
 	end
@@ -769,6 +777,84 @@ function PlantService.SellCollectionPlant(player: Player, plantUid: string): (bo
 	EconomyService.AddCash(player, cashEarned, "sell_plant")
 	QuestService.Report(player, "earn_cash", cashEarned)
 	return true, cashEarned
+end
+
+local RARITY_ORDER: { [string]: number } = {}
+for index, id in ipairs((RarityConfig :: any).Order or {}) do
+	RARITY_ORDER[id] = index
+end
+
+-- Cotización de venta: lista de plantas que entrarían en cada modo.
+-- mode: "all" | "common" (hasta Uncommon) | "duplicates" (deja la mejor de cada especie)
+local function selectPlants(player: Player, mode: string): ({ any }, number)
+	local profile = DataService.GetProfile(player)
+	local picked: { any } = {}
+	local total = 0
+	if not profile or not profile.inventory then
+		return picked, 0
+	end
+	local multiplier = MonetizationService.GetCashMultiplier(player)
+	local best: { [string]: any } = {}
+	if mode == "duplicates" then
+		for _, plant in ipairs(profile.inventory.plants) do
+			local current = best[plant.plantId]
+			if not current or (tonumber(plant.value) or 0) > (tonumber(current.value) or 0) then
+				best[plant.plantId] = plant
+			end
+		end
+	end
+	for _, plant in ipairs(profile.inventory.plants) do
+		local value = math.max(0, math.floor(tonumber(plant.value) or 0))
+		local include = false
+		if mode == "all" then
+			include = true
+		elseif mode == "common" then
+			local config = PlantConfig[plant.plantId]
+			local rank = config and RARITY_ORDER[config.rarity] or 99
+			include = rank <= 2
+		elseif mode == "duplicates" then
+			include = best[plant.plantId] ~= plant
+		end
+		if include and value > 0 then
+			table.insert(picked, plant)
+			total += math.floor(value * multiplier)
+		end
+	end
+	return picked, total
+end
+
+function PlantService.GetSellQuote(player: Player): { [string]: any }
+	local quotes = {}
+	for _, mode in ipairs({ "all", "common", "duplicates" }) do
+		local picked, total = selectPlants(player, mode)
+		quotes[mode] = { count = #picked, cash = total }
+	end
+	return quotes
+end
+
+function PlantService.SellMany(player: Player, mode: string): (boolean, any)
+	if mode ~= "all" and mode ~= "common" and mode ~= "duplicates" then
+		return false, "invalid_args"
+	end
+	if player:GetAttribute("CarryingStolenPlant") == true then
+		return false, "carrying_stolen_plant"
+	end
+	local picked, total = selectPlants(player, mode)
+	if #picked == 0 then
+		return false, "nothing_to_sell"
+	end
+	local sold = 0
+	for _, plant in ipairs(picked) do
+		if InventoryService.RemovePlant(player, plant.uid) then
+			sold += 1
+		end
+	end
+	if sold == 0 then
+		return false, "nothing_to_sell"
+	end
+	EconomyService.AddCash(player, total, "sell_plant")
+	QuestService.Report(player, "earn_cash", total)
+	return true, { count = sold, cash = total }
 end
 
 function PlantService.UseGear(player: Player, gearId: string): (boolean, any)

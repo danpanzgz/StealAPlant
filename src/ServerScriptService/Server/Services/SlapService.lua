@@ -1,131 +1,190 @@
 --!strict
+--[[
+	SlapService.lua
+	Palo cómico: un empujón amistoso, sin daño. Mejora solo con cada
+	renacimiento (RebirthConfig.StickTiers). El golpe lo decide el servidor
+	(alcance, cooldown, dirección) y el EMPUJÓN lo aplica el cliente de la
+	víctima (SlapHit): un personaje lo controla su dueño, así que mover su
+	HumanoidRootPart desde el servidor no funciona de forma fiable.
+]]
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local DataService = require(script.Parent.DataService)
 
 local SlapService = {}
 local lastSlapAt: { [number]: number } = {}
-local COOLDOWN_SECONDS = 1.2
-local RANGE = 9
+local RANGE = 11
+local TOOL_NAME = "Farm Slap Stick"
 
-local function getRebirthBonus(rebirthCount: number): number
-	local bonus = 0
-	for rebirth = 1, math.max(0, math.floor(rebirthCount)) do
-		bonus += math.max(7, 22 - rebirth * 2)
+local hitEvent = Net.GetRemoteEvent("SlapHit")
+
+local function tierOf(player: Player): any
+	local profile = DataService.GetProfile(player)
+	return RebirthConfig.StickTiers[RebirthConfig.StickTier(if profile then (profile.rebirthCount or 0) else 0)]
+end
+
+local function findTool(player: Player): Tool?
+	for _, container in ipairs({ player:FindFirstChildOfClass("Backpack"), player.Character }) do
+		local tool = container and container:FindFirstChild(TOOL_NAME)
+		if tool and tool:IsA("Tool") then
+			return tool
+		end
 	end
-	return bonus
+	return nil
+end
+
+-- Balanceo visual del palo (el Grip se anima desde el servidor y replica).
+local function swing(tool: Tool)
+	local base = tool.Grip
+	task.spawn(function()
+		for step = 1, 5 do
+			if not tool.Parent then
+				return
+			end
+			tool.Grip = base * CFrame.Angles(math.rad(-18 * step), 0, 0)
+			task.wait(0.03)
+		end
+		for step = 4, 0, -1 do
+			if not tool.Parent then
+				return
+			end
+			tool.Grip = base * CFrame.Angles(math.rad(-18 * step), 0, 0)
+			task.wait(0.04)
+		end
+		tool.Grip = base
+	end)
+end
+
+local function pop(root: BasePart, color: Color3)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	emitter.Color = ColorSequence.new(color)
+	emitter.Lifetime = NumberRange.new(0.4, 0.8)
+	emitter.Speed = NumberRange.new(8, 14)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) })
+	emitter.LightEmission = 0.6
+	emitter.Rate = 0
+	emitter.Parent = root
+	emitter:Emit(18)
+	Debris:AddItem(emitter, 1.5)
 end
 
 function SlapService.TrySlap(player: Player)
 	if player:GetAttribute("CarryingStolenPlant") == true then
 		return
 	end
+	local tier = tierOf(player)
 	local now = os.clock()
-	if now - (lastSlapAt[player.UserId] or 0) < COOLDOWN_SECONDS then
+	if now - (lastSlapAt[player.UserId] or 0) < tier.cooldown then
 		return
 	end
 	lastSlapAt[player.UserId] = now
 
-	local profile = DataService.GetProfile(player)
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if not profile or not root then
+	if not root then
 		return
+	end
+	local tool = findTool(player)
+	if tool and tool.Parent == character then
+		swing(tool)
 	end
 
 	local look = root.CFrame.LookVector
-	local targetRoot: BasePart? = nil
-	local nearestDistance = RANGE
+	local best: Player? = nil
+	local bestRoot: BasePart? = nil
+	local bestDistance = RANGE
 	for _, target in ipairs(Players:GetPlayers()) do
 		if target ~= player then
-			local targetCharacter = target.Character
-			local candidate = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") :: BasePart?
-			local humanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+			local candidate = target.Character and target.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 			if candidate and humanoid and humanoid.Health > 0 then
 				local offset = candidate.Position - root.Position
 				local distance = offset.Magnitude
-				if distance > 0 and distance < nearestDistance and look:Dot(offset.Unit) > 0.1 then
-					targetRoot = candidate
-					nearestDistance = distance
+				-- Cono amplio: basta con tenerlo delante, no hay que apuntar al milímetro.
+				if distance > 0 and distance < bestDistance and look:Dot(offset.Unit) > -0.1 then
+					best, bestRoot, bestDistance = target, candidate, distance
 				end
 			end
 		end
 	end
-	if not targetRoot then
+	if not best or not bestRoot then
 		return
 	end
 
-	local rebirthCount = profile.rebirthCount or 0
-	local bonus = getRebirthBonus(rebirthCount)
-	local horizontalForce = math.min(88, 42 * (1 + bonus / 100))
 	local direction = Vector3.new(look.X, 0, look.Z)
 	if direction.Magnitude < 0.001 then
 		return
 	end
-	direction = direction.Unit
-	local verticalForce = math.min(42, 20 * (1 + bonus / 100))
-	targetRoot:ApplyImpulse((direction * horizontalForce + Vector3.new(0, verticalForce, 0)) * targetRoot.AssemblyMass)
+	pop(bestRoot, tier.color)
+	hitEvent:FireClient(best, { direction = direction.Unit, power = tier.power, by = player.DisplayName })
 end
 
-local function createSlapTool(player: Player, character: Model)
-	local backpack = player:WaitForChild("Backpack")
+-- (Re)crea el palo según el nivel de renacimiento actual.
+function SlapService.RefreshTool(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local backpack = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack", 5)
+	if not backpack then
+		return
+	end
 	for _, container in ipairs({ backpack, character }) do
 		for _, child in ipairs(container:GetChildren()) do
-			if child:IsA("Tool") and child.Name == "Farm Slap Stick" then
+			if child:IsA("Tool") and child.Name == TOOL_NAME then
 				child:Destroy()
 			end
 		end
 	end
 
+	local tier = tierOf(player)
 	local tool = Instance.new("Tool")
-	tool.Name = "Farm Slap Stick"
-	tool.ToolTip = "Un empujón amistoso; mejora con cada renacimiento"
+	tool.Name = TOOL_NAME
+	tool.ToolTip = tier.name .. " · un empujón amistoso; mejora con cada renacimiento"
 	tool.RequiresHandle = true
 	tool.CanBeDropped = false
-	tool.Grip = CFrame.new(0, -1.2, 0) * CFrame.Angles(0, 0, math.rad(28))
+	tool:SetAttribute("Hotbar", "stick")
+	tool.Grip = CFrame.new(0, -tier.length * 0.4, 0) * CFrame.Angles(0, 0, math.rad(28))
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.35, 3, 0.35)
-	handle.Color = Color3.fromRGB(142, 91, 48)
-	handle.Material = Enum.Material.Wood
+	handle.Size = Vector3.new(0.35, tier.length, 0.35)
+	handle.Color = tier.color
+	handle.Material = tier.material
 	handle.CanCollide = false
 	handle.Massless = true
 	handle.Parent = tool
+	if tier.material == Enum.Material.Neon or tier.material == Enum.Material.Glass then
+		local light = Instance.new("PointLight")
+		light.Color = tier.color
+		light.Range = 8
+		light.Brightness = 1
+		light.Parent = handle
+	end
 	tool.Activated:Connect(function()
 		SlapService.TrySlap(player)
 	end)
 	tool.Parent = backpack
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		humanoid:EquipTool(tool)
-	end
 end
 
 local function bindPlayer(player: Player)
 	player:GetAttributeChangedSignal("CarryingStolenPlant"):Connect(function()
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if not humanoid then
-			return
-		end
-		if player:GetAttribute("CarryingStolenPlant") == true then
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid and player:GetAttribute("CarryingStolenPlant") == true then
 			humanoid:UnequipTools()
-		else
-			local backpack = player:FindFirstChildOfClass("Backpack")
-			local tool = backpack and backpack:FindFirstChild("Farm Slap Stick")
-			if tool and tool:IsA("Tool") then
-				humanoid:EquipTool(tool)
-			end
 		end
 	end)
-	player.CharacterAdded:Connect(function(character)
-		task.defer(createSlapTool, player, character)
+	player.CharacterAdded:Connect(function()
+		task.defer(SlapService.RefreshTool, player)
 	end)
 	if player.Character then
-		task.defer(createSlapTool, player, player.Character)
+		task.defer(SlapService.RefreshTool, player)
 	end
 end
 
@@ -134,9 +193,7 @@ function SlapService.Init()
 		SlapService.TrySlap(player)
 	end)
 
-	Players.PlayerAdded:Connect(function(player)
-		bindPlayer(player)
-	end)
+	Players.PlayerAdded:Connect(bindPlayer)
 	Players.PlayerRemoving:Connect(function(player)
 		lastSlapAt[player.UserId] = nil
 	end)

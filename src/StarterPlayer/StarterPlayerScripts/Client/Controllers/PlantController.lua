@@ -116,9 +116,14 @@ function PlantController.EquipSeed(plantId: string): boolean
 			if hud then
 				hud.Push("Plantaste " .. plantData.displayName .. " Seeds en tu jardín", "good")
 			end
-			clearSeedTools(true)
+			-- La semilla sigue en la mano mientras queden: planta varias seguidas.
+			task.delay(0.25, function()
+				if (ClientState.Inventory.seeds[plantId] or 0) <= 0 then
+					clearSeedTools(true)
+				end
+			end)
 		elseif hud then
-			hud.Push("No se pudo plantar: " .. tostring(result and result.reason or "error"), "warn")
+			hud.Fail(result and result.reason)
 		end
 	end)
 	tool.Parent = player:WaitForChild("Backpack")
@@ -172,7 +177,7 @@ local function openSeedPicker(plotIndex: number, hudController: any)
 						closePicker()
 					else
 						local reason = (result and result.reason) or "error"
-						hudController.ShowNotification("No se pudo plantar: " .. reason, Color3.fromRGB(255, 110, 110))
+						hudController.Fail(reason)
 					end
 				end)
 			end

@@ -22,16 +22,9 @@ end
 
 local function getSeedPool(rarityId: string): { string }
 	local ids = {}
-	for _, plantId in ipairs(PlantConfig.OrderByZone.StarterMeadow or {}) do
+	for _, plantId in ipairs(PlantConfig.Order) do
 		if PlantConfig[plantId].rarity == rarityId then
 			table.insert(ids, plantId)
-		end
-	end
-	for _, zoneId in ipairs({ "GreenhouseValley", "MysticGrove" }) do
-		for _, plantId in ipairs(PlantConfig.OrderByZone[zoneId] or {}) do
-			if PlantConfig[plantId].rarity == rarityId then
-				table.insert(ids, plantId)
-			end
 		end
 	end
 	return ids

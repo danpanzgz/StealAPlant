@@ -192,6 +192,19 @@ function InventoryService.AddPlant(player: Player, plant: any): boolean
 	ensureInventory(profile)
 	table.insert(profile.inventory.plants, plant)
 	registerDiscovery(player, profile, plant)
+	-- Récord de peso por especie (Índice).
+	local weight = tonumber(plant.weight)
+	if weight and PlantConfig[plant.plantId] then
+		profile.plantRecords = profile.plantRecords or {}
+		local record = profile.plantRecords[plant.plantId]
+		if not record then
+			record = { min = weight, max = weight, count = 0 }
+			profile.plantRecords[plant.plantId] = record
+		end
+		record.min = math.min(record.min, weight)
+		record.max = math.max(record.max, weight)
+		record.count += 1
+	end
 	DataService.MarkDirty(player)
 	InventoryService.Push(player)
 	return true

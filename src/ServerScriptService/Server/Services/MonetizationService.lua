@@ -17,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GameConfig = require(ReplicatedStorage.Shared.Config.GameConfig)
 local MonetizationConfig = require(ReplicatedStorage.Shared.Config.MonetizationConfig)
 local PetConfig = require(ReplicatedStorage.Shared.Config.PetConfig)
+local RebirthConfig = require(ReplicatedStorage.Shared.Config.RebirthConfig)
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 
 local DataService = require(script.Parent.DataService)
@@ -90,7 +91,8 @@ function MonetizationService.GetBoost(player: Player, stat: string): number
 end
 
 function MonetizationService.GetCashMultiplier(player: Player): number
-	local multiplier = 1 + getPetBonus(player, "cash")
+	local profileForRebirth = DataService.GetProfile(player)
+	local multiplier = (1 + getPetBonus(player, "cash")) * RebirthConfig.CashMultiplier(if profileForRebirth then (profileForRebirth.rebirthCount or 0) else 0)
 	local passes = MonetizationService.GetOwned(player)
 	if passes.DoubleCash then
 		multiplier *= MonetizationConfig.GamePasses.DoubleCash.cashMultiplier
@@ -110,13 +112,6 @@ function MonetizationService.GetMutationMultiplier(player: Player): number
 end
 
 -- Huecos extra para flores colocadas (pase +3 huecos).
-function MonetizationService.GetExtraPlaceSlots(player: Player): number
-	if MonetizationService.GetOwned(player).ExtraSlots then
-		return MonetizationConfig.GamePasses.ExtraSlots.extraPlaceSlots
-	end
-	return 0
-end
-
 -- Duración del domo del jardín (Maestro del escudo).
 function MonetizationService.GetDomeMultiplier(player: Player): number
 	if MonetizationService.GetOwned(player).ShieldMaster then
