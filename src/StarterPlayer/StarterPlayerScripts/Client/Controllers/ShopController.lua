@@ -95,7 +95,7 @@ local function createCard(item: any, order: number)
 			hud.Push("Compraste " .. result.displayName, "good")
 			task.defer(refresh)
 		else
-			hud.Push("Compra fallida: " .. tostring(result and result.reason or "error"), "warn")
+			hud.Fail(result and result.reason)
 		end
 	end)
 end

@@ -185,7 +185,7 @@ function RemoteHandlers.Init()
 		if isRateLimited(player, "GetSellQuote") then
 			return RATE_LIMITED
 		end
-		return { success = true, quotes = PlantService.GetSellQuote(player) }
+		return { success = true, quotes = PlantService.GetSellQuote(player), multiplier = MonetizationService.GetCashMultiplier(player) }
 	end
 
 	Net.GetRemoteFunction("SellAll").OnServerInvoke = function(player: Player, mode: any)
@@ -202,7 +202,7 @@ function RemoteHandlers.Init()
 		return { success = false, reason = result }
 	end
 
-	local HOTBAR_SLOTS = 8
+	local HOTBAR_SLOTS = 6
 	local HOTBAR_KINDS = { stick = true, seed = true, plant = true, gear = true }
 	Net.GetRemoteFunction("GetHotbar").OnServerInvoke = function(player: Player)
 		local profile = DataService.GetProfile(player)
@@ -220,11 +220,11 @@ function RemoteHandlers.Init()
 		if not profile or type(layout) ~= "table" then
 			return { success = false, reason = "invalid_args" }
 		end
-		local clean: { [number]: any } = {}
+		local clean: { [string]: any } = {}
 		for slot = 1, HOTBAR_SLOTS do
-			local entry = layout[slot]
+			local entry = layout[tostring(slot)]
 			if type(entry) == "table" and HOTBAR_KINDS[entry.kind] and type(entry.id) == "string" and #entry.id <= 64 then
-				clean[slot] = { kind = entry.kind, id = entry.id }
+				clean[tostring(slot)] = { kind = entry.kind, id = entry.id }
 			end
 		end
 		profile.hotbar = clean

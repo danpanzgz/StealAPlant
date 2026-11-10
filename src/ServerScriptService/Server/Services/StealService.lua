@@ -445,7 +445,7 @@ function StealService.Init()
 						notify(thief, "🎉 ¡" .. (plantData and plantData.displayName or "La flor") .. " está a salvo en tu jardín!", "good")
 						local owner = Players:GetPlayerByUserId(carry.ownerUserId)
 						if owner then
-							notify(owner, "La flor llegó a otro jardín.", "alarm")
+							notify(owner, "😢 ¡TE ROBARON " .. string.upper(plantData and plantData.displayName or "UNA FLOR") .. "!", "alarm")
 						end
 						if plantData and plantData.rarity ~= "Common" then
 							notifyEvent:FireAllClients({

@@ -26,13 +26,14 @@ local PlantConfig = require(ReplicatedStorage.Shared.Config.PlantConfig)
 local Client = script.Parent.Parent
 local ClientState = require(Client.ClientState)
 local UI = require(Client.UI)
+local ErrorMessages = require(ReplicatedStorage.Shared.Modules.ErrorMessages)
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local HUDController = {}
 
-type PanelEntry = { frame: Frame, onOpen: (() -> ())?, limit: UISizeConstraint, title: TextLabel }
+type PanelEntry = { frame: Frame, onOpen: (() -> ())?, limit: UISizeConstraint, title: TextLabel, compact: boolean? }
 type Notification = { label: TextLabel, stroke: UIStroke, token: number }
 type Profile = { kind: string, landscape: boolean, size: Vector2, touch: boolean }
 
@@ -99,6 +100,12 @@ end
 
 local function applyPanelSize(entry: PanelEntry, profile: Profile)
 	local titleSize = 22
+	if entry.compact then
+		entry.frame.Size = if profile.kind == "mobile" and not profile.landscape then UDim2.fromScale(0.88, 0.58) else UDim2.fromScale(0.6, 0.7)
+		entry.limit.MaxSize = Vector2.new(440, 460)
+		entry.title.TextSize = 20
+		return
+	end
 	if profile.kind == "mobile" then
 		titleSize = 19
 		if profile.landscape then
@@ -447,6 +454,71 @@ function HUDController.Push(text: string, kind: string?)
 	HUDController.ShowNotification(text, KIND_COLORS[kind or "info"] or KIND_COLORS.info)
 end
 
+-- Error legible para el jugador (toast rojo). `reason` es el código del servidor.
+function HUDController.Fail(reason: any)
+	HUDController.ShowNotification(ErrorMessages.Get(reason), Color3.fromRGB(255, 120, 110))
+	if reason == "not_enough_cash" or reason == "not_enough" then
+		HUDController.FlashCash()
+	end
+end
+
+function HUDController.FlashCash()
+	if not cashLabel then
+		return
+	end
+	cashLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+	TweenService:Create(cashLabel, TweenInfo.new(0.9), { TextColor3 = Color3.fromRGB(255, 255, 255) }):Play()
+end
+
+local bannerFrame: TextLabel? = nil
+local bannerToken = 0
+-- Cartel grande en el centro superior (robos, hitos). Se retira solo.
+function HUDController.Banner(text: string, color: Color3?, seconds: number?)
+	if not bannerFrame then
+		local label = Instance.new("TextLabel")
+		label.Name = "BigBanner"
+		label.AnchorPoint = Vector2.new(0.5, 0.5)
+		label.Position = UDim2.fromScale(0.5, 0.28)
+		label.Size = UDim2.fromOffset(340, 74)
+		label.BackgroundColor3 = Color3.fromRGB(60, 22, 22)
+		label.BorderSizePixel = 0
+		label.Font = Enum.Font.GothamBlack
+		label.TextScaled = true
+		label.TextWrapped = true
+		label.ZIndex = 60
+		label.Visible = false
+		label.Parent = screenGui
+		UI.Round(label, 14)
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 3
+		stroke.Color = Color3.fromRGB(255, 255, 255)
+		stroke.Parent = label
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 12)
+		pad.PaddingRight = UDim.new(0, 12)
+		pad.PaddingTop = UDim.new(0, 8)
+		pad.PaddingBottom = UDim.new(0, 8)
+		pad.Parent = label
+		local scale = Instance.new("UIScale")
+		scale.Parent = label
+		bannerFrame = label
+	end
+	local label = bannerFrame :: TextLabel
+	bannerToken += 1
+	local token = bannerToken
+	label.Text = text
+	label.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+	label.Visible = true
+	local scale = label:FindFirstChildOfClass("UIScale") :: UIScale
+	scale.Scale = 0.6
+	TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	task.delay(seconds or 3.5, function()
+		if token == bannerToken then
+			label.Visible = false
+		end
+	end)
+end
+
 function HUDController.UpdateCash(cash: number)
 	ClientState.Cash = cash
 	if cashLabel then
@@ -553,12 +625,20 @@ local BUTTON_COLORS = {
 	SlapButton = Color3.fromRGB(168, 92, 63),
 }
 
+local MAIN_BUTTONS = { MenuButton = true, RebirthButton = true }
+local MENU_EMOJI = {
+	BagButton = "🎒", GardenButton = "🏡", IndexButton = "📖", QuestButton = "📜",
+	SeasonButton = "🎟️", TopButton = "🏆", StoreButton = "💎", SettingsButton = "⚙️",
+}
+local menuList: ScrollingFrame? = nil
+
 function HUDController.CreateActionButton(name: string, emoji: string, labelText: string): TextButton
-	local bar = HUDController.GetActionBar()
+	local inMenu = not MAIN_BUTTONS[name] and menuList ~= nil
+	local bar: Instance = if inMenu then (menuList :: ScrollingFrame) else HUDController.GetActionBar()
 
 	local button = Instance.new("TextButton")
 	button.Name = name
-	button.LayoutOrder = #actionButtons + 1
+	button.LayoutOrder = if inMenu then #(bar :: Instance):GetChildren() else #actionButtons + 1
 	button.BorderSizePixel = 3
 	button.BorderColor3 = BORDER_COLOR
 	button.AutoButtonColor = false
@@ -569,9 +649,12 @@ function HUDController.CreateActionButton(name: string, emoji: string, labelText
 	local accent = BUTTON_COLORS[name] or Color3.fromRGB(95, 155, 112)
 	button.BackgroundColor3 = accent
 
-	local iconText = ICON_LABELS[name] or emoji
+	local iconText = if inMenu then (MENU_EMOJI[name] or emoji) else (ICON_LABELS[name] or emoji)
 	-- Si el pie repite el icono ("TOP" / "Top") se omite en lugar de duplicarlo.
 	local showCaption = labelText ~= "" and string.lower(labelText) ~= string.lower(iconText)
+	if inMenu then
+		showCaption = labelText ~= ""
+	end
 
 	local icon = Instance.new("TextLabel")
 	icon.Name = "Icon"
@@ -587,7 +670,7 @@ function HUDController.CreateActionButton(name: string, emoji: string, labelText
 	icon.Parent = button
 	local iconLimit = Instance.new("UITextSizeConstraint")
 	iconLimit.MinTextSize = 8
-	iconLimit.MaxTextSize = 20
+	iconLimit.MaxTextSize = if inMenu then 30 else 20
 	iconLimit.Parent = icon
 
 	if showCaption then
@@ -603,7 +686,7 @@ function HUDController.CreateActionButton(name: string, emoji: string, labelText
 		caption.Parent = button
 		local captionLimit = Instance.new("UITextSizeConstraint")
 		captionLimit.MinTextSize = 7
-		captionLimit.MaxTextSize = 11
+		captionLimit.MaxTextSize = if inMenu then 13 else 11
 		captionLimit.Parent = caption
 	end
 
@@ -629,12 +712,14 @@ function HUDController.CreateActionButton(name: string, emoji: string, labelText
 		button.BackgroundColor3 = accent
 	end)
 
-	table.insert(actionButtons, button)
-	layoutHUD()
+	if not inMenu then
+		table.insert(actionButtons, button)
+		layoutHUD()
+	end
 	return button
 end
 
-function HUDController.CreatePanel(name: string, titleText: string, onOpen: (() -> ())?): (Frame, ScrollingFrame)
+function HUDController.CreatePanel(name: string, titleText: string, onOpen: (() -> ())?, compact: boolean?): (Frame, ScrollingFrame)
 	local frame = Instance.new("Frame")
 	frame.Name = name .. "Panel"
 	frame.Visible = false
@@ -695,7 +780,7 @@ function HUDController.CreatePanel(name: string, titleText: string, onOpen: (() 
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = list
 
-	local entry: PanelEntry = { frame = frame, onOpen = onOpen, limit = limit, title = title }
+	local entry: PanelEntry = { frame = frame, onOpen = onOpen, limit = limit, title = title, compact = compact }
 	panels[name] = entry
 	applyPanelSize(entry, getProfile())
 	return frame, list
@@ -762,6 +847,17 @@ function HUDController.Init(snapshot: any)
 	createNotificationLayer()
 	createEventBanner()
 	createAlarm()
+
+	-- Menú: agrupa todos los botones secundarios en una sola cuadrícula.
+	do
+		local _, list = HUDController.CreatePanel("Menu", "Menú", nil, true)
+		UI.UseGrid(list, Vector2.new(88, 78), 8)
+		menuList = list
+		local menuButton = HUDController.CreateActionButton("MenuButton", "☰", "Menú")
+		menuButton.Activated:Connect(function()
+			HUDController.TogglePanel("Menu")
+		end)
+	end
 	layoutHUD()
 	-- Rotación del móvil, redimensionado de ventana, cambio de insets...
 	screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutHUD)
@@ -795,6 +891,9 @@ function HUDController.Init(snapshot: any)
 
 	Net.GetRemoteEvent("NotificationPush").OnClientEvent:Connect(function(payload)
 		HUDController.Push(payload.text, payload.kind)
+		if payload.kind == "alarm" and type(payload.text) == "string" then
+			HUDController.Banner(payload.text, Color3.fromRGB(255, 225, 225), 4)
+		end
 	end)
 
 	Net.GetRemoteEvent("GardenAlarmTriggered").OnClientEvent:Connect(function(payload)

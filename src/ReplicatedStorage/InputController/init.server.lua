@@ -17,15 +17,5 @@ toggleInventory.Pressed:Connect(function()
 	InventoryController.ToggleBag()
 end)
 
-local slapAction = gameplayContext:WaitForChild("Slap") :: InputAction
-slapAction.Pressed:Connect(function()
-	local character = player.Character
-	local equippedTool = character and character:FindFirstChildOfClass("Tool")
-	if equippedTool and equippedTool.Name ~= "Farm Slap Stick" then
-		return
-	end
-	Net.GetRemoteEvent("SlapAction"):FireServer()
-end)
-
 -- La colocación de plantas se gestiona directamente en InventoryController
 -- (InputBegan + botones en pantalla), sin depender de InputContext.

@@ -16,6 +16,7 @@ local Workspace = game:GetService("Workspace")
 
 local Net = require(ReplicatedStorage.Shared.Modules.Net)
 local SoundConfig = require(ReplicatedStorage.Shared.Config.SoundConfig)
+local Settings = require(script.Parent.Parent.Settings)
 
 local AudioController = {}
 
@@ -23,8 +24,6 @@ local sfxGroup: SoundGroup
 local musicGroup: SoundGroup
 local currentTrack: Sound? = nil
 local lastTrackIndex = 0
-local audioMode = 1 -- 1 música+efectos, 2 solo efectos, 3 silencio
-local MODE_LABELS = { "🔊", "🔉", "🔇" }
 local musicRandom = Random.new()
 
 local function newGroup(name: string, volume: number): SoundGroup
@@ -98,13 +97,13 @@ end
 
 -- Baja la música mientras ocurre algo importante (apertura de huevo).
 function AudioController.DuckMusic(seconds: number)
-	if audioMode ~= 1 then
+	if not Settings.Music then
 		return
 	end
 	local base = SoundConfig.MusicVolume
 	TweenService:Create(musicGroup, TweenInfo.new(0.3), { Volume = base * 0.25 }):Play()
 	task.delay(seconds, function()
-		if audioMode == 1 then
+		if Settings.Music then
 			TweenService:Create(musicGroup, TweenInfo.new(0.8), { Volume = base }):Play()
 		end
 	end)
@@ -112,7 +111,7 @@ end
 
 local function playNextTrack()
 	local tracks = SoundConfig.Music
-	if #tracks == 0 or audioMode ~= 1 then
+	if #tracks == 0 or not Settings.Music then
 		return
 	end
 	local index = musicRandom:NextInteger(1, #tracks)
@@ -152,9 +151,9 @@ local function stopMusic()
 end
 
 local function applyMode()
-	musicGroup.Volume = if audioMode == 1 then SoundConfig.MusicVolume else 0
-	sfxGroup.Volume = if audioMode == 3 then 0 else SoundConfig.SfxVolume
-	if audioMode == 1 then
+	musicGroup.Volume = if Settings.Music then SoundConfig.MusicVolume else 0
+	sfxGroup.Volume = if Settings.Sfx then SoundConfig.SfxVolume else 0
+	if Settings.Music then
 		if not currentTrack then
 			playNextTrack()
 		end
@@ -246,7 +245,7 @@ local function hookButton(button: GuiButton)
 	end)
 end
 
-function AudioController.Init(hud: any)
+function AudioController.Init(_hud: any)
 	sfxGroup = newGroup("SFX", SoundConfig.SfxVolume)
 	musicGroup = newGroup("Music", SoundConfig.MusicVolume)
 
@@ -297,18 +296,10 @@ function AudioController.Init(hud: any)
 		AudioController.Play("DailyReward")
 	end)
 
-	local button = hud.CreateActionButton("AudioButton", MODE_LABELS[audioMode], "Audio")
-	button.Activated:Connect(function()
-		audioMode = audioMode % 3 + 1
-		local icon = button:FindFirstChild("Icon")
-		if icon and icon:IsA("TextLabel") then
-			icon.Text = MODE_LABELS[audioMode]
+	Settings.Changed:Connect(function(key: string)
+		if key == "Music" or key == "Sfx" then
+			applyMode()
 		end
-		applyMode()
-		hud.Push(
-			if audioMode == 1 then "Música y efectos activados" elseif audioMode == 2 then "Solo efectos" else "Audio silenciado",
-			"info"
-		)
 	end)
 
 	applyMode()
